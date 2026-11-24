@@ -22,7 +22,12 @@ class DataCollector:
         self.ssl_ctx.check_hostname = False
         self.ssl_ctx.verify_mode = ssl.CERT_NONE
         self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none'
         }
         
         # Track health, errors, and backoff per source
@@ -30,7 +35,7 @@ class DataCollector:
         
         # Rate-limiting tracker: domain -> last request timestamp
         self.domain_last_request: Dict[str, float] = {}
-        self.min_domain_delay = 1.2 # seconds between requests to same domain
+        self.min_domain_delay = 2.5 # seconds between requests to same domain
 
     def _get_domain(self, url: str) -> str:
         try:
@@ -162,11 +167,11 @@ class DataCollector:
         wires.extend(self.fetch_rss_items("http://feeds.bbci.co.uk/news/world/rss.xml", "BBC World Breaking", max_items=8))
         # Google News World Geopolitics
         wires.extend(self.fetch_rss_items("https://news.google.com/rss/headlines/section/topic/WORLD", "Global Geopolitics", max_items=8))
-        # Google News Real-time 1-hour Breaking Conflict & Geopolitical Shock Search
+        # Google News Real-time 1-hour Breaking Conflict & Macro Shock Search (Unified)
         wires.extend(self.fetch_rss_items(
-            "https://news.google.com/rss/search?q=when:1h+(gold+OR+dollar+OR+yields+OR+treasury+OR+strike+OR+iran+OR+ukraine+OR+tariffs)&hl=en-US&gl=US&ceid=US:en",
-            "Realtime Conflict Wires",
-            max_items=12
+            "https://news.google.com/rss/search?q=when:1h+(gold+OR+dollar+OR+yields+OR+treasury+OR+strike+OR+iran+OR+ukraine+OR+tariffs+OR+fed+OR+inflation+OR+debt+OR+crude+OR+opec)&hl=en-US&gl=US&ceid=US:en",
+            "Realtime Conflict & Macro Wires",
+            max_items=16
         ))
         return wires
 
@@ -186,12 +191,6 @@ class DataCollector:
         items.extend(self.fetch_rss_items("https://feeds.content.dowjones.io/public/rss/mw_topstories", "MarketWatch Wire", max_items=6))
         # Google Business Macro
         items.extend(self.fetch_rss_items("https://news.google.com/rss/headlines/section/topic/BUSINESS", "Global Business Wire", max_items=8))
-        # Google News Real-time 1-hour Breaking Central Bank & Macro Shock Search
-        items.extend(self.fetch_rss_items(
-            "https://news.google.com/rss/search?q=when:1h+(fed+OR+inflation+OR+debt+OR+crude+OR+opec)&hl=en-US&gl=US&ceid=US:en",
-            "Realtime Macro Shock Wire",
-            max_items=10
-        ))
         return items
 
     def fetch_crowd_squawks_and_queries(self) -> List[Dict[str, str]]:
