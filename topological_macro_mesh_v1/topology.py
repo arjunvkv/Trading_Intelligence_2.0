@@ -380,6 +380,17 @@ class TopologyEngine:
         for k in d_edges:
             del self.edges[k]
 
+        # 3. Clean up stale N-Gram phrase history to prevent memory leak and linguistic noise
+        stale_phrases = [
+            phrase for phrase, timestamps in self.phrase_history.items()
+            if not timestamps or (now - max(timestamps)) > self.half_life
+        ]
+        for p in stale_phrases:
+            del self.phrase_history[p]
+            self.phrase_publishers.pop(p, None)
+            self.phrase_sources.pop(p, None)
+            self.phrase_contexts.pop(p, None)
+
     def export_graph_json(self) -> Dict[str, Any]:
         self.prune_and_decay()
         degrees, hops_to_god, _ = self._compute_graph_topology()

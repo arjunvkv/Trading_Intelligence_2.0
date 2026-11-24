@@ -58,15 +58,24 @@ class DualKeyTradeArbiter:
             return {"active": False, "reason": "Insufficient M5 candle data"}
 
         closes = [r['close'] for r in rates]
-        
-        # Calculate 20-period EMA for objective trend detection
-        multiplier = 2.0 / (20 + 1)
-        ema_20 = closes[0]
-        for c in closes[1:]:
-            ema_20 = (c - ema_20) * multiplier + ema_20
+        highs = [r['high'] for r in rates]
+        lows = [r['low'] for r in rates]
 
-        current_close = closes[-1]
-        tape_trend = "BULLISH" if current_close >= ema_20 else "BEARISH"
+        # Objective price action swing structure (Zero Lagging Moving Averages / EMAs)
+        recent_highs = highs[-6:]
+        recent_lows = lows[-6:]
+        prior_highs = highs[-12:-6]
+        prior_lows = lows[-12:-6]
+
+        higher_highs = max(recent_highs) >= max(prior_highs)
+        higher_lows = min(recent_lows) >= min(prior_lows)
+
+        if higher_highs and higher_lows:
+            tape_trend = "BULLISH"
+        elif not higher_highs and not higher_lows:
+            tape_trend = "BEARISH"
+        else:
+            tape_trend = "BULLISH" if closes[-1] >= closes[-6] else "BEARISH"
 
         # Scan for unmitigated FVGs from most recent back
         bullish_fvgs = []
@@ -117,13 +126,33 @@ class DualKeyTradeArbiter:
             "ask": tick.ask,
             "spread_pts": spread_pts,
             "tape_trend": tape_trend,
-            "ema_20": round(ema_20, 2),
             "bullish_fvgs": bullish_fvgs,
             "bearish_fvgs": bearish_fvgs,
-            "current_m5_close": current_close,
+            "current_m5_close": closes[-1],
             "m5_high": max(r['high'] for r in rates[-12:]),
             "m5_low": min(r['low'] for r in rates[-12:])
         }
+
+    def _derive_macro_valence(self, text: str, label: str) -> str:
+        """Derives directional valence vector (BULLISH vs BEARISH for XAUUSD) without lagging price indicators."""
+        t = (text + " " + label).lower()
+        bullish_cues = [
+            'debase', 'deficit', 'debt', 'cut', 'easing', 'dovish', 'war', 'strike', 'attack', 
+            'drone', 'missile', 'blockade', 'tanker', 'hormuz', 'sanction', 'gold buy', 
+            'reserve', 'sovereign', 'inelastic', 'haven', 'sabotage', 'conflict'
+        ]
+        bearish_cues = [
+            'hike', 'tighten', 'hawkish', 'rate hike', 'fed hike', 'higher for longer', 
+            'dollar surge', 'strong dollar', 'deflation', 'peace deal', 'armistice', 
+            'truce', 'ceasefire', 'deal made', 'outflow', 'dump'
+        ]
+        bull_score = sum(1 for c in bullish_cues if c in t)
+        bear_score = sum(1 for c in bearish_cues if c in t)
+        if bull_score > bear_score:
+            return "BULLISH"
+        elif bear_score > bull_score:
+            return "BEARISH"
+        return "NEUTRAL"
 
     def evaluate_dual_key_setup(
         self,
@@ -132,14 +161,13 @@ class DualKeyTradeArbiter:
         lead_telemetry: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Executes the Dual-Key Veto logic without hardcoded bias:
-        Key 1: Macro Outlier & Attention Divergence
-        Key 2: MT5 Structural Absorption & 20-EMA Confluence
+        Executes the Dual-Key Veto logic with directional confluence & dynamic volatility scaling:
+        Key 1: Macro Outlier with Directional Valence Confluence
+        Key 2: MT5 Structural Price Action Absorption & Orderbook Feasibility
         """
         now = time.time()
         
         # ── KEY 1: MACRO & ATTENTION DIVERGENCE AUDIT ────────────────────────
-        # Require a genuine outlier anomaly from verified wires (Z >= 10.0σ)
         extreme_anomalies = [n for n in surging_nodes if n.get("z_score", 0.0) >= 10.0 and not n.get("is_god")]
 
         if not extreme_anomalies:
@@ -155,6 +183,9 @@ class DualKeyTradeArbiter:
         anomaly_label = top_anomaly.get("label", "Macro Outlier")
         trigger_text = top_anomaly.get("trigger_text", "Headline")
 
+        # Derive Macro Directional Valence Vector
+        macro_valence = self._derive_macro_valence(trigger_text, anomaly_label)
+
         # ── KEY 2: MT5 5-MINUTE ORDERBOOK & FVG AUDIT ───────────────────────
         m5_audit = self.evaluate_m5_structure("XAUUSD")
         if not m5_audit.get("active"):
@@ -169,8 +200,18 @@ class DualKeyTradeArbiter:
         ask = m5_audit["ask"]
         tape_trend = m5_audit["tape_trend"]
 
-        # Objective structural alignment: Bias follows the MT5 tape trend confirmed by FVG absorption
-        bias = tape_trend # "BULLISH" or "BEARISH"
+        # Confluence Rule: Macro Valence Vector must NOT conflict with MT5 Structural Tape
+        if macro_valence != "NEUTRAL" and macro_valence != tape_trend:
+            return {
+                "decision": "STAND_DOWN",
+                "key1_passed": True,
+                "key2_passed": False,
+                "reason": f"Directional Decoupling Veto: Macro Outlier is {macro_valence} but MT5 Structural Tape is {tape_trend}."
+            }
+
+        bias = tape_trend if macro_valence == "NEUTRAL" else macro_valence
+        atr = round(max(0.40, (m5_audit["m5_high"] - m5_audit["m5_low"]) / 6.0), 2)
+        max_risk = max(2.50, round(atr * 2.5, 2)) # Dynamic Volatility Scaling (No Hardcoded Caps)
 
         if bias == "BULLISH":
             fvgs = m5_audit.get("bullish_fvgs", [])
@@ -179,22 +220,30 @@ class DualKeyTradeArbiter:
                     "decision": "STAND_DOWN",
                     "key1_passed": True,
                     "key2_passed": False,
-                    "reason": "Key 2 Veto: Trend is Bullish but no unmitigated Bullish M5 FVG found for absorption entry."
+                    "reason": "Key 2 Veto: Bias is Bullish but no unmitigated Bullish M5 FVG found for absorption entry."
                 }
-            # Dynamic ATR buffer for SL
-            atr = round(max(0.40, (m5_audit["m5_high"] - m5_audit["m5_low"]) / 6.0), 2)
             target_fvg = min(fvgs, key=lambda f: abs(f["ce"] - ask))
             entry_price = round(target_fvg["ce"], 2)
             sl_price = round(target_fvg["bottom"] - (atr * 0.5), 2)
             risk = entry_price - sl_price
-            if risk <= 0.25 or risk > 6.00:
+            
+            # Anti-Phantom Limit Order Check
+            order_distance = abs(entry_price - ask)
+            if order_distance > (atr * 1.8):
                 return {
                     "decision": "STAND_DOWN",
                     "key1_passed": True,
                     "key2_passed": False,
-                    "reason": f"Key 2 Veto: FVG risk ${risk:.2f} outside safe bounds ($0.25-$6.00)."
+                    "reason": f"Phantom Limit Order Veto: FVG CE ${entry_price:.2f} is ${order_distance:.2f} away from market, exceeding fill tolerance."
                 }
-            # Target structural M5 swing high or 2.0x risk minimum
+
+            if risk <= 0.25 or risk > max_risk:
+                return {
+                    "decision": "STAND_DOWN",
+                    "key1_passed": True,
+                    "key2_passed": False,
+                    "reason": f"Key 2 Veto: FVG risk ${risk:.2f} outside dynamic bounds ($0.25-${max_risk:.2f})."
+                }
             tp_price = max(round(entry_price + (risk * 2.0), 2), round(m5_audit["m5_high"], 2))
             rr = round((tp_price - entry_price) / risk, 2)
             order_type = "BUY_LIMIT" if entry_price < ask else "BUY"
@@ -206,21 +255,30 @@ class DualKeyTradeArbiter:
                     "decision": "STAND_DOWN",
                     "key1_passed": True,
                     "key2_passed": False,
-                    "reason": "Key 2 Veto: Trend is Bearish but no unmitigated Bearish M5 FVG found for distribution entry."
+                    "reason": "Key 2 Veto: Bias is Bearish but no unmitigated Bearish M5 FVG found for distribution entry."
                 }
-            atr = round(max(0.40, (m5_audit["m5_high"] - m5_audit["m5_low"]) / 6.0), 2)
             target_fvg = min(fvgs, key=lambda f: abs(f["ce"] - bid))
             entry_price = round(target_fvg["ce"], 2)
             sl_price = round(target_fvg["top"] + (atr * 0.5), 2)
             risk = sl_price - entry_price
-            if risk <= 0.25 or risk > 6.00:
+
+            # Anti-Phantom Limit Order Check
+            order_distance = abs(entry_price - bid)
+            if order_distance > (atr * 1.8):
                 return {
                     "decision": "STAND_DOWN",
                     "key1_passed": True,
                     "key2_passed": False,
-                    "reason": f"Key 2 Veto: FVG risk ${risk:.2f} outside safe bounds ($0.25-$6.00)."
+                    "reason": f"Phantom Limit Order Veto: FVG CE ${entry_price:.2f} is ${order_distance:.2f} away from market, exceeding fill tolerance."
                 }
-            # Target structural M5 swing low or 2.0x risk minimum
+
+            if risk <= 0.25 or risk > max_risk:
+                return {
+                    "decision": "STAND_DOWN",
+                    "key1_passed": True,
+                    "key2_passed": False,
+                    "reason": f"Key 2 Veto: FVG risk ${risk:.2f} outside dynamic bounds ($0.25-${max_risk:.2f})."
+                }
             tp_price = min(round(entry_price - (risk * 2.0), 2), round(m5_audit["m5_low"], 2))
             rr = round((entry_price - tp_price) / risk, 2)
             order_type = "SELL_LIMIT" if entry_price > bid else "SELL"

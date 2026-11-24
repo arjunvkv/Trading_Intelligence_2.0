@@ -9,6 +9,7 @@ Zero-dogma institutional market physics:
 """
 
 import time
+import math
 from datetime import datetime, timezone
 from typing import Dict, Any, List
 
@@ -109,14 +110,12 @@ class LeadArbiter:
         sess = self.get_active_session_conductivity()
         att_div = self.calculate_attention_divergence(wire_z_scores or [], crowd_z_scores or [])
         
-        # Dynamic Geodesic Transmission Window:
-        # Hops to Gold (d) represents the transmission stages across the macro manifold.
+        # Empirical Geodesic Information Diffusion Model
+        # Logarithmic saturation curve replacing linear hop magic numbers
         hops = max(1, hops_to_xau if hops_to_xau < 99 else 3)
-        base_min_latency = hops * 4.5
-        base_max_latency = hops * 12.0
-
-        adj_min = max(2, round(base_min_latency * sess["lag_multiplier"]))
-        adj_max = max(5, round(base_max_latency * sess["lag_multiplier"]))
+        base_diffusion = 2.5 + (math.log(1.0 + hops) * 6.0)
+        adj_min = max(2, round((base_diffusion * 0.65) * sess["lag_multiplier"]))
+        adj_max = max(5, round((base_diffusion * 1.75) * sess["lag_multiplier"]))
 
         # Dynamic Market Physics
         if hops == 1:
