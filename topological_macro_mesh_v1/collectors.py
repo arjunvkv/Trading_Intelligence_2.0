@@ -14,6 +14,7 @@ import json
 import xml.etree.ElementTree as ET
 import time
 import re
+from datetime import datetime, timedelta
 from typing import List, Dict, Any
 
 class DataCollector:
@@ -29,13 +30,26 @@ class DataCollector:
             'Sec-Fetch-Mode': 'navigate',
             'Sec-Fetch-Site': 'none'
         }
+        self.wiki_headers = {
+            'User-Agent': 'MacroMeshIntelligenceBot/2.0 (sovereign macro research desk; contact@tradingmesh.internal)',
+            'Accept': 'application/json'
+        }
         
         # Track health, errors, and backoff per source
         self.source_states: Dict[str, Dict[str, Any]] = {}
         
         # Rate-limiting tracker: domain -> last request timestamp
         self.domain_last_request: Dict[str, float] = {}
-        self.min_domain_delay = 2.5 # seconds between requests to same domain
+        # Domain-specific delays (strict on Google News, fast on open high-throughput CDNs)
+        self.domain_delays: Dict[str, float] = {
+            'news.google.com': 2.5,
+            'suggestqueries.google.com': 0.1,
+            'wikimedia.org': 0.1,
+            'finance.yahoo.com': 0.3,
+            'mastodon.social': 0.3,
+            'econtwitter.net': 0.3
+        }
+        self.default_domain_delay = 0.5
 
     def _get_domain(self, url: str) -> str:
         try:
@@ -45,13 +59,14 @@ class DataCollector:
 
     def _polite_domain_wait(self, domain: str):
         now = time.time()
+        delay = self.domain_delays.get(domain, self.default_domain_delay)
         last = self.domain_last_request.get(domain, 0.0)
         elapsed = now - last
-        if elapsed < self.min_domain_delay:
-            time.sleep(self.min_domain_delay - elapsed)
+        if elapsed < delay:
+            time.sleep(delay - elapsed)
         self.domain_last_request[domain] = time.time()
 
-    def _fetch_safe(self, url: str, source_name: str, timeout: int = 6) -> bytes:
+    def _fetch_safe(self, url: str, source_name: str, timeout: int = 6, custom_headers: Dict[str, str] = None) -> bytes:
         now = time.time()
         domain = self._get_domain(url)
         
@@ -81,7 +96,8 @@ class DataCollector:
         self._polite_domain_wait(domain)
 
         try:
-            req = urllib.request.Request(url, headers=self.headers)
+            req_headers = custom_headers if custom_headers is not None else self.headers
+            req = urllib.request.Request(url, headers=req_headers)
             with urllib.request.urlopen(req, context=self.ssl_ctx, timeout=timeout) as resp:
                 data = resp.read()
                 state["status"] = "HEALTHY"
@@ -193,45 +209,83 @@ class DataCollector:
         items.extend(self.fetch_rss_items("https://news.google.com/rss/headlines/section/topic/BUSINESS", "Global Business Wire", max_items=8))
         return items
 
-    def fetch_crowd_squawks_and_queries(self) -> List[Dict[str, str]]:
-        """Federated open squawks & real-time public query trajectories with rate-limiting safety."""
+    def fetch_wikipedia_crowd_pageviews(self) -> List[Dict[str, str]]:
+        """Wikimedia Public Attention API: measures real-time crowd research on sovereign & crisis nodes."""
         posts = []
-        
-        # 1. Mastodon Economics Tag
-        raw_masto_econ = self._fetch_safe("https://mastodon.social/api/v1/timelines/tag/economics?limit=8", "Mastodon Economics")
-        if raw_masto_econ:
-            try:
-                data = json.loads(raw_masto_econ.decode('utf-8', errors='ignore'))
-                for post in data:
-                    content = post.get('content', '')
-                    clean = re.sub(r'<[^>]+>', '', content).strip()
-                    if clean and len(clean) > 20:
-                        posts.append({
-                            "source": "Mastodon Economics",
-                            "text": clean[:180]
-                        })
-            except Exception:
-                pass
+        articles = [
+            ("Strait_of_Hormuz", "Hormuz Chokepoint"),
+            ("Bab-el-Mandeb", "Bab el-Mandeb Chokepoint"),
+            ("Gold_as_an_investment", "Gold Reserve Demand"),
+            ("Federal_Reserve", "Federal Reserve Liquidity"),
+            ("Red_Sea_crisis", "Red Sea Disruption"),
+            ("Sovereign_debt", "Sovereign Debt Risk"),
+            ("Inflation", "Inflationary Pressure")
+        ]
 
-        # 2. Mastodon Geopolitics Tag
-        raw_masto_geo = self._fetch_safe("https://mastodon.social/api/v1/timelines/tag/geopolitics?limit=8", "Mastodon Geopolitics")
-        if raw_masto_geo:
-            try:
-                data = json.loads(raw_masto_geo.decode('utf-8', errors='ignore'))
-                for post in data:
-                    content = post.get('content', '')
-                    clean = re.sub(r'<[^>]+>', '', content).strip()
-                    if clean and len(clean) > 20:
-                        posts.append({
-                            "source": "Mastodon Geopolitics",
-                            "text": clean[:180]
-                        })
-            except Exception:
-                pass
+        end_dt = datetime.utcnow() - timedelta(days=1)
+        start_dt = datetime.utcnow() - timedelta(days=3)
+        start_str = start_dt.strftime("%Y%m%d00")
+        end_str = end_dt.strftime("%Y%m%d00")
 
-        # 3. Dynamic Google Public Query Autocomplete (Polite, throttled)
-        # Seedless macro inquiries to capture what the global crowd is actively searching right now
-        search_seeds = ['why is gold', 'why is dollar', 'hormuz', 'airspace', 'sanctions', 'bank liquidity']
+        for art, label in articles:
+            url = f"https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/en.wikipedia.org/all-access/all-agents/{art}/daily/{start_str}/{end_str}"
+            raw = self._fetch_safe(url, f"Wikimedia: {label}", timeout=5, custom_headers=self.wiki_headers)
+            if raw:
+                try:
+                    data = json.loads(raw.decode('utf-8', errors='ignore'))
+                    items = data.get('items', [])
+                    if len(items) >= 2:
+                        prev_v = items[-2]['views']
+                        curr_v = items[-1]['views']
+                        growth = ((curr_v - prev_v) / max(1, prev_v)) * 100.0
+                        sign = "+" if growth >= 0 else ""
+                        desc = f"Wikipedia Public Research Pulse: {label} ({curr_v:,} daily inquiries, {sign}{growth:.1f}% velocity)"
+                        posts.append({
+                            "source": f"Wikimedia: {label}",
+                            "publisher": "Wikipedia Public Attention",
+                            "text": desc
+                        })
+                except Exception:
+                    pass
+        return posts
+
+    def fetch_federated_mastodon_squawks(self) -> List[Dict[str, str]]:
+        """Multi-instance federated open squawks across academic economics, energy, and geopolitics."""
+        posts = []
+        feeds = [
+            ("https://econtwitter.net/api/v1/timelines/tag/economics?limit=6", "EconTwitter Academic Desk"),
+            ("https://mastodon.social/api/v1/timelines/tag/economics?limit=6", "Mastodon Macro Desk"),
+            ("https://mastodon.social/api/v1/timelines/tag/geopolitics?limit=6", "Mastodon Geopolitics Desk"),
+            ("https://mastodon.social/api/v1/timelines/tag/energy?limit=6", "Mastodon Energy Desk"),
+            ("https://mastodon.social/api/v1/timelines/tag/inflation?limit=6", "Mastodon Debasement Desk")
+        ]
+
+        for url, source_name in feeds:
+            raw = self._fetch_safe(url, source_name, timeout=5)
+            if raw:
+                try:
+                    data = json.loads(raw.decode('utf-8', errors='ignore'))
+                    for post in data:
+                        content = post.get('content', '')
+                        clean = re.sub(r'<[^>]+>', '', content).strip()
+                        if clean and len(clean) > 20:
+                            posts.append({
+                                "source": source_name,
+                                "publisher": source_name,
+                                "text": clean[:180]
+                            })
+                except Exception:
+                    pass
+        return posts
+
+    def fetch_public_search_trajectories(self) -> List[Dict[str, str]]:
+        """Dynamic real-world search autocomplete trajectories revealing active public inquiries."""
+        posts = []
+        search_seeds = [
+            'why is gold', 'why is dollar', 'hormuz', 'airspace', 
+            'sanctions', 'bank liquidity', 'treasury yields', 
+            'crude oil supply', 'central bank gold', 'red sea shipping'
+        ]
         for seed in search_seeds:
             url = f"https://suggestqueries.google.com/complete/search?client=firefox&q={urllib.parse.quote(seed)}"
             raw_sugg = self._fetch_safe(url, f"Crowd Suggest: {seed}", timeout=4)
@@ -242,11 +296,19 @@ class DataCollector:
                         if phrase and len(phrase) > 8:
                             posts.append({
                                 "source": f"Public Search: {seed}",
+                                "publisher": "Google Crowd Autocomplete",
                                 "text": phrase
                             })
                 except Exception:
                     pass
+        return posts
 
+    def fetch_crowd_squawks_and_queries(self) -> List[Dict[str, str]]:
+        """Aggregates all crowd sources: Wikipedia Attention, Federated Mastodon, and Search Trajectories."""
+        posts = []
+        posts.extend(self.fetch_wikipedia_crowd_pageviews())
+        posts.extend(self.fetch_federated_mastodon_squawks())
+        posts.extend(self.fetch_public_search_trajectories())
         return posts
 
     def get_health_status(self) -> Dict[str, Any]:
