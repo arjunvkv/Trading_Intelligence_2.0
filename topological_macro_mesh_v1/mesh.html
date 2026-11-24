@@ -991,6 +991,7 @@
             <span class="font-bold text-amber-300 font-mono text-[11px] truncate tracking-tight flex-1 min-w-0">"${c.phrase || c.title}"</span>
             <div class="flex items-center gap-1 flex-shrink-0">
               ${hawkesHtml}
+              ${c.icf ? `<span class="px-1 py-0.2 rounded bg-zinc-800 text-cyan-300 font-mono text-[8px] font-semibold" title="Shannon Information Surprise">${c.icf}b</span>` : ''}
               <span class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-[9px] font-bold whitespace-nowrap">+${c.z_score}σ</span>
             </div>
           </div>

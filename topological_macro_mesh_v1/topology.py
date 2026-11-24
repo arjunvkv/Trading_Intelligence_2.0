@@ -51,11 +51,13 @@ class TopologyEngine:
         self.token_first_seen = {}
         self.token_trigger = {}
         
-        # N-Gram Phrase Tracking with Publisher Provenance
+        # N-Gram Phrase Tracking with Publisher Provenance & Inverse Corpus Frequency (ICF)
         self.phrase_history = defaultdict(list)
         self.phrase_publishers = defaultdict(set)
         self.phrase_sources = defaultdict(set)
         self.phrase_contexts = defaultdict(list)
+        self.phrase_doc_counts = defaultdict(int) # Background document frequency
+        self.total_docs_seen = 0
         self.seen_items = {} # Cache (publisher, text) -> last_seen_ts to prevent duplicate poll timestamp spam
         
         self.edges = {}
@@ -101,22 +103,28 @@ class TopologyEngine:
             item_key = (publisher, text.strip())
             is_new_item = (item_key not in self.seen_items or (now - self.seen_items[item_key]) > 3600)
             self.seen_items[item_key] = now
+            if is_new_item:
+                self.total_docs_seen += 1
 
             tokens = self._clean_tokens(text)
             ngrams = self._extract_ngrams(text)
 
-            # 1. Multi-Word Phrase Tracking with Provenance
+            # 1. Multi-Word Phrase Tracking with Provenance & ICF
             is_crowd = (cluster_idx == 4 or "crowd" in source.lower() or "search" in source.lower() or "wikimedia" in source.lower() or "mastodon" in source.lower())
+            seen_phrases_in_doc = set()
             for phrase in ngrams[:8]:
                 if is_new_item:
                     self.phrase_history[phrase].append(now)
+                    if phrase not in seen_phrases_in_doc:
+                        self.phrase_doc_counts[phrase] += 1
+                        seen_phrases_in_doc.add(phrase)
                 self.phrase_publishers[phrase].add(publisher)
                 self.phrase_sources[phrase].add(source)
                 if is_crowd:
                     self.crowd_phrases.add(phrase)
                 else:
                     self.wire_phrases.add(phrase)
-                if len(self.phrase_contexts[phrase]) < 3:
+                if len(self.phrase_contexts[phrase]) < 4:
                     self.phrase_contexts[phrase].append((text[:130], publisher))
                 self.phrase_history[phrase] = [ts for ts in self.phrase_history[phrase] if now - ts < 7200]
 
@@ -260,8 +268,6 @@ class TopologyEngine:
             google_url = f"https://www.google.com/search?q={q_encoded}"
             x_url = f"https://x.com/search?q={q_encoded}&f=live"
 
-            context_headline, primary_pub = self.phrase_contexts[phrase][0] if self.phrase_contexts[phrase] else (phrase, "Wire")
-
             # Distinguish real journalistic newsrooms from crowd queries
             CROWD_SOURCES = {'wikimedia attention pulse', 'google crowd autocomplete', 'mastodon decentralized fediverse'}
             real_newsrooms = [p for p in publishers if p.lower() not in CROWD_SOURCES and 'crowd' not in p.lower() and 'search' not in p.lower() and 'wiki' not in p.lower()]
@@ -272,6 +278,29 @@ class TopologyEngine:
                 prov_label = f"{len(crowd_channels)} Crowd Channels (0 Newsrooms)"
             else:
                 prov_label = f"{len(real_newsrooms)} Newsrooms"
+
+            # Representative Centroid Headline (Killing the [0] arbitrary index bug)
+            contexts = self.phrase_contexts.get(phrase, [])
+            if contexts:
+                def score_context(ctx):
+                    hl, pub = ctx
+                    hl_lower = hl.lower()
+                    pub_lower = pub.lower()
+                    is_real_pub = pub_lower not in CROWD_SOURCES and 'crowd' not in pub_lower and 'search' not in pub_lower and 'wiki' not in pub_lower
+                    admin_pen = 0.2 if any(w in hl_lower for w in ['challenge', 'competition', 'welcome remarks', 'ceremony', 'holiday', 'fellowship']) else 1.0
+                    return (2.5 if is_real_pub else 0.5) * admin_pen * len(hl.split())
+
+                best_ctx = max(contexts, key=score_context)
+                context_headline, primary_pub = best_ctx
+            else:
+                context_headline, primary_pub = (phrase, "Wire")
+
+            # Shannon Information Surprise / Inverse Corpus Frequency (ICF)
+            # Ubiquitous background entities ("federal reserve", "united states") have high doc_freq (~0.3-0.7 ICF).
+            # Specific precursor clues appearing abruptly have low doc_freq (~2.5-4.5 ICF).
+            total_corpus_docs = max(20, self.total_docs_seen)
+            doc_freq = self.phrase_doc_counts.get(phrase, 1)
+            icf = round(math.log(1.0 + (total_corpus_docs / max(1, doc_freq))), 2)
 
             # 1. Hawkes Ignition Point Process (Self-Exciting Acceleration)
             hawkes = self.lead_arbiter.compute_hawkes_ignition(timestamps, list(publishers), now=now)
@@ -313,6 +342,7 @@ class TopologyEngine:
                 "phrase": phrase,
                 "title": phrase.title(),
                 "z_score": round(z_score, 2),
+                "icf": icf,
                 "publisher_count": pub_count,
                 "newsroom_count": len(real_newsrooms),
                 "crowd_channel_count": len(crowd_channels),
@@ -340,8 +370,11 @@ class TopologyEngine:
                 "x_url": x_url
             })
 
-        # Sort by mathematical burst velocity * publisher breadth * hawkes ratio
-        candidates.sort(key=lambda c: c["z_score"] * math.sqrt(c["publisher_count"]) * c["hawkes"]["ratio"], reverse=True)
+        # Sort by mathematical burst velocity * Shannon ICF surprise * real newsroom breadth * hawkes ratio
+        candidates.sort(
+            key=lambda c: c["z_score"] * c["icf"] * math.sqrt(c["newsroom_count"] if not c["is_pure_crowd"] else 0.4) * c["hawkes"]["ratio"],
+            reverse=True
+        )
         
         # Strict distinct-event deduplication across phrases and headline entities
         deduped = []
@@ -573,18 +606,29 @@ class TopologyEngine:
 
         constellations = self.extract_emerging_constellations(top_k=6)
         
-        # Primary driver is top constellation if active
-        if constellations:
-            top_c = constellations[0]
+        # Primary Driver Verification: Elevated to Primary Driver IF AND ONLY IF
+        # corroborated across 2+ independent newsrooms, not pure crowd, with genuine Hawkes ratio >= 1.5
+        eligible_drivers = [
+            c for c in constellations 
+            if c.get("newsroom_count", 0) >= 2 
+            and not c.get("is_pure_crowd", False)
+            and c.get("hawkes", {}).get("ratio", 1.0) >= 1.5
+            and c.get("z_score", 0.0) >= 1.8
+        ]
+
+        if eligible_drivers:
+            top_c = eligible_drivers[0]
+            clean_pubs = [p for p in top_c["publishers"] if "crowd" not in p.lower() and "wiki" not in p.lower() and "autocomplete" not in p.lower()]
             primary_driver = {
                 "active": True,
                 "headline": top_c["sample_headline"],
                 "clue_phrase": top_c["phrase"],
                 "z_velocity": top_c["z_score"],
-                "source_count": top_c["publisher_count"],
-                "sources_list": ", ".join(top_c["publishers"][:4]),
+                "icf_surprise": top_c.get("icf", 1.0),
+                "source_count": top_c["newsroom_count"],
+                "sources_list": ", ".join(clean_pubs[:4]),
                 "transmission": top_c["stage"],
-                "regime": "DYNAMIC_COMMUNITY",
+                "regime": "CROSS_CONFIRMED_DRIVER",
                 "lead_window": f"{top_c['maturation_minutes']}m forming",
                 "hawkes_badge": top_c.get("hawkes_badge", ""),
                 "causal_pipeline": top_c.get("causal_pipeline_name", ""),
@@ -598,11 +642,11 @@ class TopologyEngine:
         else:
             primary_driver = {
                 "active": False,
-                "headline": "Macro Graph in Structural Equilibrium",
-                "clue_phrase": "Market Equilibrium",
+                "headline": "Macro Horizon in Pre-Ignition Equilibrium (Awaiting Cross-Newsroom Corroboration)",
+                "clue_phrase": "Structural Equilibrium",
                 "z_velocity": 0.0,
                 "source_count": 0,
-                "sources_list": "All Streams Balanced",
+                "sources_list": "Independent Wires Balanced",
                 "transmission": "Structural balance",
                 "regime": "NEUTRAL",
                 "lead_window": "0m",
