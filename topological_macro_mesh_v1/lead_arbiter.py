@@ -85,10 +85,15 @@ class LeadArbiter:
                 "badge": "Hawkes: DORMANT (1.0x)"
             }
 
-        # Trap Safeguard: Publisher Quorum
-        # Single-source echo chambers cannot trigger ignition
+        # Trap Safeguard: Publisher Quorum & Newsroom Verification
+        # Crowd sources alone (Wikipedia, Autocomplete) cannot trigger Hawkes Ignition!
+        CROWD_SOURCES = {'wikimedia attention pulse', 'google crowd autocomplete', 'mastodon decentralized fediverse'}
+        has_real_newsroom = any(p.lower() not in CROWD_SOURCES and 'crowd' not in p.lower() and 'search' not in p.lower() and 'wiki' not in p.lower() for p in publishers)
         distinct_pubs = len(set(publishers)) if publishers else 1
-        if distinct_pubs < 2 and len(timestamps) > 1:
+
+        if not has_real_newsroom:
+            alpha_adj = alpha * 0.15 # Severely dampen crowd self-polling loops
+        elif distinct_pubs < 2 and len(timestamps) > 1:
             alpha_adj = alpha * 0.30
         else:
             alpha_adj = alpha
@@ -105,8 +110,13 @@ class LeadArbiter:
         intensity = mu + total_shock
         ratio = round(intensity / max(0.001, mu), 2)
 
-        if ratio >= 3.0 and distinct_pubs >= 2:
-            state = "IGNITION" # Exponential organic cascade active!
+        if not has_real_newsroom:
+            # Pure crowd inquiries can NEVER claim institutional ignition!
+            state = "CROWD_PULSE"
+            is_ignition = False
+            badge = f"👥 Crowd Pulse ({ratio}x)"
+        elif ratio >= 3.0 and distinct_pubs >= 2:
+            state = "IGNITION" # Exponential organic cascade verified across 2+ newsrooms!
             is_ignition = True
             badge = f"🔥 Hawkes: IGNITION ({ratio}x)"
         elif ratio >= 1.8:
@@ -130,27 +140,36 @@ class LeadArbiter:
             "is_ignition": is_ignition,
             "active_shocks": active_events,
             "distinct_publishers": distinct_pubs,
+            "has_real_newsroom": has_real_newsroom,
             "badge": badge
         }
 
-    def derive_causal_pathway(self, text: str, cluster_idx: int = 0) -> Dict[str, Any]:
+    def derive_causal_pathway(self, text: str, cluster_idx: int = 0, is_crowd_only: bool = False) -> Dict[str, Any]:
         """
-        Traces the shortest real-world sovereign macro transmission pipeline to Gold (XAUUSD):
-        - Pipeline 1: Kinetic Chokepoint & Physical Supply
-        - Pipeline 2: Sovereign Liquidity & Real Yield Vectors
-        - Pipeline 3: Monetary Debasement & Reserve Flows
+        Traces the genuine sovereign macro transmission pipeline to Gold (XAUUSD).
+        Zero fake theater: Crowd queries are never tagged as physical kinetic strikes.
         """
         text_lower = text.lower()
         
-        # Pipeline 1 keywords
+        # 1. Pure crowd inquiry filter: Never invent military strikes or debt defaults for Wikipedia
+        if is_crowd_only or any(k in text_lower for k in ['wikipedia', 'autocomplete', 'search pulse', 'inquiries,']):
+            return {
+                "pipeline": "CROWD_RESEARCH_PULSE",
+                "pipeline_name": "Crowd Research Pulse (Lagging Public Query)",
+                "transmission_chain": "Public Query Curiosity ➔ Retail Sentiment Drift (No Institutional Wire Confirmation)",
+                "expected_gold_impact": "NEUTRAL_CROWD_PULSE",
+                "inflection_window_min": 0,
+                "inflection_window_max": 0,
+                "inflection_summary": "Retail crowd curiosity; unconfirmed on sovereign institutional wires"
+            }
+
+        # 2. Genuine institutional wire transmission pathways
         p1_kw = ['tanker', 'strait', 'hormuz', 'bab-el-mandeb', 'red sea', 'suez', 'missile', 
                  'strike', 'drone', 'pipeline', 'crude', 'oil', 'reroute', 'insurance', 'war risk', 
                  'houthi', 'iran', 'gulf', 'yemen', 'airspace', 'chokepoint']
-        # Pipeline 2 keywords
         p2_kw = ['discount window', 'liquidity', 'bank', 'reverse repo', 'yield', 'treasury', 
                  'debt', 'fed', 'ecb', 'boe', 'rate hike', 'rate cut', 'spread', 'margin', 
                  'credit', 'collateral', 'interbank', 'inflation', 'cpi', 'interest rate']
-        # Pipeline 3 keywords
         p3_kw = ['debasement', 'reserve', 'pboc', 'gold reserve', 'sanctions', 'dedollarization', 
                  'auction tail', 'bid-to-cover', 'fiscal dominance', 'dollar index', 'dxy', 'sovereign debt']
 
@@ -160,41 +179,28 @@ class LeadArbiter:
 
         if score_p1 >= max(score_p2, score_p3, 1):
             pipeline = "KINETIC_CHOKEPOINT"
-            pipe_name = "Pipeline 1: Kinetic Chokepoint & Physical Supply"
-            transmission = "Kinetic Disruption ➔ Fleet Diversion ➔ Crude Freight Shock ➔ Haven Expansion"
-            gold_bias = "BULLISH_SAFE_HAVEN"
+            pipe_name = "Pipeline 1: Geopolitical & Physical Supply Vector"
+            transmission = "Physical Supply / Shipping Dislocation ➔ Safe-Haven Risk Premium Expansion"
+            gold_bias = "SAFE_HAVEN_EXPANSION"
             inflection_minutes = (8, 20)
         elif score_p2 >= max(score_p1, score_p3, 1):
             pipeline = "SOVEREIGN_LIQUIDITY"
-            pipe_name = "Pipeline 2: Sovereign Liquidity & Real Yield Vectors"
-            transmission = "Credit / Yield Repricing ➔ Dollar Liquidity Scramble ➔ Initial Flush ➔ Sustained Debasement Bid"
+            pipe_name = "Pipeline 2: Sovereign Liquidity & Real Yield Vector"
+            transmission = "Yield Curve / Credit Repricing ➔ Real Yield Opportunity Cost Transmission"
             gold_bias = "VOLATILITY_EXPANSION"
             inflection_minutes = (15, 35)
         elif score_p3 >= max(score_p1, score_p2, 1):
             pipeline = "CURRENCY_DEBASEMENT"
-            pipe_name = "Pipeline 3: Monetary Debasement & Reserve Flows"
-            transmission = "Fiscal Dominance Escalation ➔ Foreign Central Bank Bullion Accumulation ➔ Direct Cash Floor"
-            gold_bias = "STRUCTURAL_BULLISH_FLOOR"
+            pipe_name = "Pipeline 3: Monetary Debasement & Reserve Vector"
+            transmission = "Fiscal Dominance / Sovereign Debt Expansion ➔ Central Bank Bullion Accumulation Floor"
+            gold_bias = "STRUCTURAL_DEBASEMENT_BID"
             inflection_minutes = (20, 45)
         else:
-            if cluster_idx == 2:
-                pipeline = "KINETIC_CHOKEPOINT"
-                pipe_name = "Pipeline 1: Kinetic Chokepoint & Physical Supply"
-                transmission = "Regional Flashpoint ➔ Risk Premium Transmission ➔ Safe Haven Bid"
-                gold_bias = "BULLISH_SAFE_HAVEN"
-                inflection_minutes = (10, 25)
-            elif cluster_idx == 0:
-                pipeline = "CURRENCY_DEBASEMENT"
-                pipe_name = "Pipeline 3: Monetary Debasement & Reserve Flows"
-                transmission = "Sovereign Debt Issuance ➔ Central Bank Absorption ➔ Monetary Depreciation"
-                gold_bias = "STRUCTURAL_BULLISH_FLOOR"
-                inflection_minutes = (20, 45)
-            else:
-                pipeline = "INTERMARKET_FLOW"
-                pipe_name = "Pipeline 4: Intermarket Flow Balancing"
-                transmission = "FX / Yield Dislocation ➔ Multi-Asset Rebalancing ➔ Tape Liquidity Absorption"
-                gold_bias = "EQUILIBRIUM_SEEKING"
-                inflection_minutes = (12, 30)
+            pipeline = "INTERMARKET_FLOW"
+            pipe_name = "Pipeline 4: Structural Intermarket Equilibrium"
+            transmission = "Macro Equilibrium Transmission ➔ Tape Liquidity Absorption"
+            gold_bias = "EQUILIBRIUM_SEEKING"
+            inflection_minutes = (12, 30)
 
         return {
             "pipeline": pipeline,

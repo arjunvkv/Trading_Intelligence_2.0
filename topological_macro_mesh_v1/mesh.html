@@ -908,7 +908,7 @@
       list.innerHTML = '';
       clues.forEach(c => {
         const card = document.createElement('div');
-        card.className = 'p-2.5 rounded bg-zinc-900/95 border border-zinc-800 hover:border-zinc-700 transition cursor-pointer space-y-1.5 shadow-sm';
+        card.className = 'p-2.5 rounded bg-zinc-900/95 border border-zinc-800 hover:border-zinc-700 transition cursor-pointer space-y-1.5 shadow-sm overflow-hidden max-w-full';
         
         // Match node in graph if possible
         const matchedNode = nodes.find(n => !n.isGod && c.phrase && c.phrase.includes(n.id));
@@ -944,7 +944,7 @@
           } else if (c.hawkes_badge.includes('COMPOUNDING')) {
             hColor = 'bg-orange-500/20 text-orange-300 border-orange-500/40 font-semibold';
           }
-          hawkesHtml = `<span class="px-1.5 py-0.5 rounded text-[8.5px] font-mono border ${hColor}">${c.hawkes_badge}</span>`;
+          hawkesHtml = `<span class="px-1.5 py-0.5 rounded text-[8.5px] font-mono border ${hColor} flex-shrink-0">${c.hawkes_badge}</span>`;
         }
 
         // Attention Divergence Lead badge
@@ -958,17 +958,17 @@
           } else if (c.lead_badge.includes('PRICED-IN')) {
             lColor = 'bg-zinc-800 text-zinc-400 border-zinc-700';
           }
-          leadBadgeHtml = `<span class="px-1.5 py-0.5 rounded text-[8.5px] font-mono border ${lColor}">${c.lead_badge}</span>`;
+          leadBadgeHtml = `<span class="px-1.5 py-0.5 rounded text-[8.5px] font-mono border ${lColor} flex-shrink-0 truncate max-w-[120px]">${c.lead_badge}</span>`;
         }
 
         // Causal Pipeline HTML
         let causalHtml = '';
         if (c.causal_pipeline_name) {
           causalHtml = `
-            <div class="bg-zinc-950/70 p-1.5 rounded border border-zinc-800/80 space-y-0.5 font-mono">
-              <div class="flex items-center justify-between text-[9px]">
-                <span class="text-cyan-300 font-semibold truncate">⚡ ${c.causal_pipeline_name}</span>
-                <span class="text-amber-400/90 text-[8.5px] font-medium">${c.expected_gold_impact || ''}</span>
+            <div class="bg-zinc-950/70 p-1.5 rounded border border-zinc-800/80 space-y-0.5 font-mono overflow-hidden">
+              <div class="flex items-center justify-between text-[9px] gap-2">
+                <span class="text-cyan-300 font-semibold truncate flex-1 min-w-0">⚡ ${c.causal_pipeline_name}</span>
+                <span class="text-amber-400/90 text-[8.5px] font-medium flex-shrink-0 whitespace-nowrap">${c.expected_gold_impact || ''}</span>
               </div>
               ${c.transmission_chain ? `<p class="text-zinc-400 text-[8.5px] leading-tight italic truncate">➔ ${c.transmission_chain}</p>` : ''}
             </div>
@@ -979,26 +979,26 @@
         let offRampHtml = '';
         if (c.off_ramp_note) {
           offRampHtml = `
-            <div class="text-[8.5px] font-mono text-zinc-400 flex items-center justify-between bg-zinc-950/40 px-1.5 py-0.5 rounded border border-zinc-800/50">
-              <span class="text-zinc-400 truncate">🛡️ ${c.off_ramp_note}</span>
-              <span class="text-amber-400/80 font-bold ml-1">${c.off_ramp_remaining_min !== undefined ? c.off_ramp_remaining_min + 'm' : ''}</span>
+            <div class="text-[8.5px] font-mono text-zinc-400 flex items-center justify-between bg-zinc-950/40 px-1.5 py-0.5 rounded border border-zinc-800/50 gap-1 overflow-hidden">
+              <span class="text-zinc-400 truncate flex-1 min-w-0">🛡️ ${c.off_ramp_note}</span>
+              <span class="text-amber-400/80 font-bold ml-1 flex-shrink-0">${c.off_ramp_remaining_min !== undefined ? c.off_ramp_remaining_min + 'm' : ''}</span>
             </div>
           `;
         }
 
         card.innerHTML = `
-          <div class="flex items-center justify-between gap-1">
-            <span class="font-bold text-amber-300 font-mono text-[11px] truncate tracking-tight">"${c.phrase || c.title}"</span>
+          <div class="flex items-center justify-between gap-1 overflow-hidden">
+            <span class="font-bold text-amber-300 font-mono text-[11px] truncate tracking-tight flex-1 min-w-0">"${c.phrase || c.title}"</span>
             <div class="flex items-center gap-1 flex-shrink-0">
               ${hawkesHtml}
               <span class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-[9px] font-bold whitespace-nowrap">+${c.z_score}σ</span>
             </div>
           </div>
 
-          <div class="flex items-center gap-1.5 flex-wrap">
-            <div class="text-[9px] font-mono px-1.5 py-0.5 rounded border ${stageBadgeColor} leading-tight font-semibold flex items-center justify-between flex-1">
+          <div class="flex items-center gap-1.5 overflow-hidden">
+            <div class="text-[9px] font-mono px-1.5 py-0.5 rounded border ${stageBadgeColor} leading-tight font-semibold flex items-center justify-between flex-1 min-w-0 overflow-hidden">
               <span class="truncate">${stageStr}</span>
-              <span class="text-zinc-400 font-normal ml-1">⏱️ ${matMin}</span>
+              <span class="text-zinc-400 font-normal ml-1 flex-shrink-0">⏱️ ${matMin}</span>
             </div>
             ${leadBadgeHtml}
           </div>
@@ -1010,7 +1010,7 @@
           ${offRampHtml}
           
           <div class="text-[9px] text-zinc-400 font-mono leading-tight flex items-center justify-between border-t border-zinc-800/80 pt-1">
-            <span class="text-zinc-400">Provenance: <b class="text-cyan-300">${pubCount} Newsrooms</b></span>
+            <span class="text-zinc-400">Provenance: <b class="${c.is_pure_crowd ? 'text-amber-400' : 'text-cyan-300'}">${c.provenance_label || (pubCount + ' Sources')}</b></span>
             <span class="text-zinc-500 truncate max-w-[130px]">${pubListStr}</span>
           </div>
 

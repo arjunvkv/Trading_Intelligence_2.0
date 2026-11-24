@@ -56,6 +56,7 @@ class TopologyEngine:
         self.phrase_publishers = defaultdict(set)
         self.phrase_sources = defaultdict(set)
         self.phrase_contexts = defaultdict(list)
+        self.seen_items = {} # Cache (publisher, text) -> last_seen_ts to prevent duplicate poll timestamp spam
         
         self.edges = {}
         self.nodes = {}
@@ -97,13 +98,18 @@ class TopologyEngine:
             if not text or len(text) < 8:
                 continue
 
+            item_key = (publisher, text.strip())
+            is_new_item = (item_key not in self.seen_items or (now - self.seen_items[item_key]) > 3600)
+            self.seen_items[item_key] = now
+
             tokens = self._clean_tokens(text)
             ngrams = self._extract_ngrams(text)
 
             # 1. Multi-Word Phrase Tracking with Provenance
             is_crowd = (cluster_idx == 4 or "crowd" in source.lower() or "search" in source.lower() or "wikimedia" in source.lower() or "mastodon" in source.lower())
             for phrase in ngrams[:8]:
-                self.phrase_history[phrase].append(now)
+                if is_new_item:
+                    self.phrase_history[phrase].append(now)
                 self.phrase_publishers[phrase].add(publisher)
                 self.phrase_sources[phrase].add(source)
                 if is_crowd:
@@ -241,13 +247,13 @@ class TopologyEngine:
 
             # Formation Stage
             if pub_count >= 3 and z_score >= 3.0:
-                stage = "STAGE 3: PRE-WIRE ACCELERATION (High Burst Velocity)"
+                stage = "STAGE 3: PRE-WIRE"
                 stage_pct = 85
             elif pub_count >= 2 and z_score >= 1.8:
-                stage = "STAGE 2: CLUSTER FORMING (Cross-Confirmed Multi-Source)"
+                stage = "STAGE 2: CLUSTER FORMING"
                 stage_pct = 55
             else:
-                stage = "STAGE 1: GROUND WHISPER (Early Precursor Signal)"
+                stage = "STAGE 1: GROUND WHISPER"
                 stage_pct = 25
 
             q_encoded = urllib.parse.quote(phrase)
@@ -256,11 +262,22 @@ class TopologyEngine:
 
             context_headline, primary_pub = self.phrase_contexts[phrase][0] if self.phrase_contexts[phrase] else (phrase, "Wire")
 
+            # Distinguish real journalistic newsrooms from crowd queries
+            CROWD_SOURCES = {'wikimedia attention pulse', 'google crowd autocomplete', 'mastodon decentralized fediverse'}
+            real_newsrooms = [p for p in publishers if p.lower() not in CROWD_SOURCES and 'crowd' not in p.lower() and 'search' not in p.lower() and 'wiki' not in p.lower()]
+            crowd_channels = [p for p in publishers if p.lower() in CROWD_SOURCES or 'crowd' in p.lower() or 'search' in p.lower() or 'wiki' in p.lower()]
+            is_pure_crowd = (len(real_newsrooms) == 0 and len(crowd_channels) > 0)
+
+            if is_pure_crowd:
+                prov_label = f"{len(crowd_channels)} Crowd Channels (0 Newsrooms)"
+            else:
+                prov_label = f"{len(real_newsrooms)} Newsrooms"
+
             # 1. Hawkes Ignition Point Process (Self-Exciting Acceleration)
             hawkes = self.lead_arbiter.compute_hawkes_ignition(timestamps, list(publishers), now=now)
 
-            # 2. Sovereign Causal Transmission Pathway
-            causal = self.lead_arbiter.derive_causal_pathway(context_headline)
+            # 2. Sovereign Causal Transmission Pathway (Zero fabricated kinetic strikes on crowd queries)
+            causal = self.lead_arbiter.derive_causal_pathway(context_headline, is_crowd_only=is_pure_crowd)
 
             # 3. Attention Divergence Asymmetry (Wires vs Crowd)
             is_wire = phrase in self.wire_phrases
@@ -297,6 +314,10 @@ class TopologyEngine:
                 "title": phrase.title(),
                 "z_score": round(z_score, 2),
                 "publisher_count": pub_count,
+                "newsroom_count": len(real_newsrooms),
+                "crowd_channel_count": len(crowd_channels),
+                "is_pure_crowd": is_pure_crowd,
+                "provenance_label": prov_label,
                 "publishers": list(publishers),
                 "primary_publisher": primary_pub,
                 "sample_headline": context_headline,
