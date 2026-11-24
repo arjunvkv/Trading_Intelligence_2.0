@@ -777,8 +777,7 @@
           if (data.primary_driver && data.primary_driver.active) {
             const p = data.primary_driver;
             const hwk = p.hawkes_badge ? `<span class="px-1.5 py-0.2 rounded bg-amber-500/25 text-amber-300 font-bold border border-amber-500/40">${p.hawkes_badge}</span> ` : '';
-            const pipe = p.causal_pipeline ? `<span class="text-cyan-300 font-semibold">• ${p.causal_pipeline}</span> ` : '';
-            title.innerHTML = `${hwk}<span class="text-white font-medium">${p.headline}</span> <span class="text-zinc-400 font-mono text-[10px]">(${pipe}Z: +${p.z_velocity}σ, ${p.source_count} Newsrooms)</span>`;
+            title.innerHTML = `${hwk}<span class="text-white font-medium">${p.headline}</span> <span class="text-zinc-400 font-mono text-[10px]">(Z: +${p.z_velocity}σ, ${p.source_count} Newsrooms)</span>`;
             if (verifyGoogle) verifyGoogle.href = p.verify_google || '#';
             if (verifyX) verifyX.href = p.verify_x || '#';
             card.classList.remove('hidden');
@@ -961,20 +960,6 @@
           leadBadgeHtml = `<span class="px-1.5 py-0.5 rounded text-[8.5px] font-mono border ${lColor} flex-shrink-0 truncate max-w-[120px]">${c.lead_badge}</span>`;
         }
 
-        // Causal Pipeline HTML
-        let causalHtml = '';
-        if (c.causal_pipeline_name) {
-          causalHtml = `
-            <div class="bg-zinc-950/70 p-1.5 rounded border border-zinc-800/80 space-y-0.5 font-mono overflow-hidden">
-              <div class="flex items-center justify-between text-[9px] gap-2">
-                <span class="text-cyan-300 font-semibold truncate flex-1 min-w-0">⚡ ${c.causal_pipeline_name}</span>
-                <span class="text-amber-400/90 text-[8.5px] font-medium flex-shrink-0 whitespace-nowrap">${c.expected_gold_impact || ''}</span>
-              </div>
-              ${c.transmission_chain ? `<p class="text-zinc-400 text-[8.5px] leading-tight italic truncate">➔ ${c.transmission_chain}</p>` : ''}
-            </div>
-          `;
-        }
-
         // Off-ramp note HTML
         let offRampHtml = '';
         if (c.off_ramp_note) {
@@ -1003,8 +988,6 @@
             </div>
             ${leadBadgeHtml}
           </div>
-
-          ${causalHtml}
 
           <p class="text-zinc-300 text-[10px] line-clamp-2 leading-snug">&bull; ${c.sample_headline}</p>
 
