@@ -428,9 +428,14 @@ def start_server():
     # Start multi-threaded HTTP server so concurrent requests and browser polling never block
     http.server.ThreadingHTTPServer.allow_reuse_address = True
     http.server.ThreadingHTTPServer.daemon_threads = True
-    with http.server.ThreadingHTTPServer(("", PORT), MeshHTTPHandler) as httpd:
-        print(f"Living Mesh UI Server running at http://localhost:{PORT}/mesh.html (Multi-Threaded)")
-        httpd.serve_forever()
+    while True:
+        try:
+            with http.server.ThreadingHTTPServer(("", PORT), MeshHTTPHandler) as httpd:
+                print(f"Living Mesh UI Server running at http://localhost:{PORT}/mesh.html (Multi-Threaded)")
+                httpd.serve_forever()
+        except Exception as e:
+            print(f"[SERVER EXCEPTION] {e}, restarting in 2 seconds...")
+            time.sleep(2)
 
 if __name__ == "__main__":
     start_server()
