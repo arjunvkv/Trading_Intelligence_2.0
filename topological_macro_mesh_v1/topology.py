@@ -13,6 +13,10 @@ import re
 import urllib.parse
 from collections import defaultdict, deque
 from typing import List, Dict, Any, Tuple, Set
+try:
+    from lead_arbiter import LeadArbiter
+except ImportError:
+    from topological_macro_mesh_v1.lead_arbiter import LeadArbiter
 
 STOPWORDS = {
     'the', 'and', 'for', 'that', 'this', 'with', 'from', 'have', 'were', 
@@ -36,6 +40,9 @@ class TopologyEngine:
     def __init__(self, half_life_seconds: float = 7200.0): # 2-hour half life
         self.half_life = half_life_seconds
         self.decay_constant = math.log(2) / self.half_life
+        self.lead_arbiter = LeadArbiter()
+        self.wire_phrases = set()
+        self.crowd_phrases = set()
         
         self.token_history = defaultdict(list)
         self.token_publishers = defaultdict(set)
@@ -94,10 +101,15 @@ class TopologyEngine:
             ngrams = self._extract_ngrams(text)
 
             # 1. Multi-Word Phrase Tracking with Provenance
+            is_crowd = (cluster_idx == 4 or "crowd" in source.lower() or "search" in source.lower() or "wikimedia" in source.lower() or "mastodon" in source.lower())
             for phrase in ngrams[:8]:
                 self.phrase_history[phrase].append(now)
                 self.phrase_publishers[phrase].add(publisher)
                 self.phrase_sources[phrase].add(source)
+                if is_crowd:
+                    self.crowd_phrases.add(phrase)
+                else:
+                    self.wire_phrases.add(phrase)
                 if len(self.phrase_contexts[phrase]) < 3:
                     self.phrase_contexts[phrase].append((text[:130], publisher))
                 self.phrase_history[phrase] = [ts for ts in self.phrase_history[phrase] if now - ts < 7200]
@@ -244,6 +256,42 @@ class TopologyEngine:
 
             context_headline, primary_pub = self.phrase_contexts[phrase][0] if self.phrase_contexts[phrase] else (phrase, "Wire")
 
+            # 1. Hawkes Ignition Point Process (Self-Exciting Acceleration)
+            hawkes = self.lead_arbiter.compute_hawkes_ignition(timestamps, list(publishers), now=now)
+
+            # 2. Sovereign Causal Transmission Pathway
+            causal = self.lead_arbiter.derive_causal_pathway(context_headline)
+
+            # 3. Attention Divergence Asymmetry (Wires vs Crowd)
+            is_wire = phrase in self.wire_phrases
+            is_crowd = phrase in self.crowd_phrases
+            if is_wire and not is_crowd and z_score >= 2.2:
+                lead_type = "ASYMMETRIC_LEAD"
+                lead_desc = "High-Alpha Front-Run (Wires accelerating, Crowd unaware)"
+                lead_badge = "🎯 Asymmetric Lead: High Alpha"
+            elif is_crowd and not is_wire:
+                lead_type = "CROWD_BUBBLE"
+                lead_desc = "Crowd Search Divergence (Public speculation without hard wires)"
+                lead_badge = "👥 Crowd Speculation"
+            elif is_wire and is_crowd:
+                lead_type = "PRICED_IN_SATURATION"
+                lead_desc = "Mainstream Saturation (Wires & Public converged; priced-in)"
+                lead_badge = "⚠️ Priced-In Saturation"
+            else:
+                lead_type = "STRUCTURAL_BALANCE"
+                lead_desc = "Equilibrium Transmission"
+                lead_badge = "⚖️ Structural Equilibrium"
+
+            # 4. Mathematical Clue Off-Ramp Invalidation Lifespan
+            last_ts = max(timestamps) if timestamps else now
+            idle_min = round((now - last_ts) / 60.0, 1)
+            ttl_min = 30.0
+            remaining_min = max(0.0, round(ttl_min - idle_min, 1))
+            if remaining_min > 0:
+                off_ramp_status = f"{remaining_min}m remaining | Decays if unconfirmed"
+            else:
+                off_ramp_status = "Decaying naturally (stale unconfirmed clue)"
+
             candidates.append({
                 "phrase": phrase,
                 "title": phrase.title(),
@@ -255,13 +303,24 @@ class TopologyEngine:
                 "stage": stage,
                 "stage_pct": stage_pct,
                 "maturation_minutes": maturation_min,
-                "invalidation_note": "Decays naturally if no new primary publisher confirms in the next 15 minutes.",
+                "hawkes": hawkes,
+                "hawkes_badge": hawkes["badge"],
+                "causal_pipeline": causal["pipeline"],
+                "causal_pipeline_name": causal["pipeline_name"],
+                "transmission_chain": causal["transmission_chain"],
+                "expected_gold_impact": causal["expected_gold_impact"],
+                "inflection_summary": causal["inflection_summary"],
+                "lead_type": lead_type,
+                "lead_desc": lead_desc,
+                "lead_badge": lead_badge,
+                "off_ramp_remaining_min": remaining_min,
+                "off_ramp_note": off_ramp_status,
                 "google_url": google_url,
                 "x_url": x_url
             })
 
-        # Sort by mathematical burst velocity * publisher breadth
-        candidates.sort(key=lambda c: c["z_score"] * math.sqrt(c["publisher_count"]), reverse=True)
+        # Sort by mathematical burst velocity * publisher breadth * hawkes ratio
+        candidates.sort(key=lambda c: c["z_score"] * math.sqrt(c["publisher_count"]) * c["hawkes"]["ratio"], reverse=True)
         
         # Strict distinct-event deduplication across phrases and headline entities
         deduped = []
@@ -506,6 +565,12 @@ class TopologyEngine:
                 "transmission": top_c["stage"],
                 "regime": "DYNAMIC_COMMUNITY",
                 "lead_window": f"{top_c['maturation_minutes']}m forming",
+                "hawkes_badge": top_c.get("hawkes_badge", ""),
+                "causal_pipeline": top_c.get("causal_pipeline_name", ""),
+                "transmission_chain": top_c.get("transmission_chain", ""),
+                "expected_impact": top_c.get("expected_gold_impact", ""),
+                "lead_badge": top_c.get("lead_badge", ""),
+                "inflection_summary": top_c.get("inflection_summary", ""),
                 "verify_google": top_c["google_url"],
                 "verify_x": top_c["x_url"]
             }

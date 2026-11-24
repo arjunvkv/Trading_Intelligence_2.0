@@ -57,6 +57,155 @@ class LeadArbiter:
             "utc_hour": hour
         }
 
+    def compute_hawkes_ignition(
+        self, 
+        timestamps: List[float], 
+        publishers: List[str] = None,
+        now: float = None,
+        alpha: float = 1.25,
+        beta: float = 0.0025, # ~15-20 min half-life
+        mu: float = 0.08
+    ) -> Dict[str, Any]:
+        """
+        Hawkes Point Process Self-Exciting Intensity:
+        λ(t) = μ + Σ α * exp(-β * (t - t_i))
+        Measures organic acceleration and contagion velocity with Publisher Quorum protection.
+        """
+        if now is None:
+            now = time.time()
+        
+        if not timestamps:
+            return {
+                "intensity": round(mu, 3),
+                "baseline": round(mu, 3),
+                "ratio": 1.0,
+                "state": "DORMANT",
+                "is_ignition": False,
+                "corroborated_publishers": 0,
+                "badge": "Hawkes: DORMANT (1.0x)"
+            }
+
+        # Trap Safeguard: Publisher Quorum
+        # Single-source echo chambers cannot trigger ignition
+        distinct_pubs = len(set(publishers)) if publishers else 1
+        if distinct_pubs < 2 and len(timestamps) > 1:
+            alpha_adj = alpha * 0.30
+        else:
+            alpha_adj = alpha
+
+        total_shock = 0.0
+        active_events = 0
+        for ts in timestamps:
+            dt = now - ts
+            if 0 <= dt <= 7200: # within last 2 hours
+                decayed = alpha_adj * math.exp(-beta * dt)
+                total_shock += decayed
+                active_events += 1
+
+        intensity = mu + total_shock
+        ratio = round(intensity / max(0.001, mu), 2)
+
+        if ratio >= 3.0 and distinct_pubs >= 2:
+            state = "IGNITION" # Exponential organic cascade active!
+            is_ignition = True
+            badge = f"🔥 Hawkes: IGNITION ({ratio}x)"
+        elif ratio >= 1.8:
+            state = "COMPOUNDING" # Multi-source developing traction
+            is_ignition = False
+            badge = f"⚡ Hawkes: COMPOUNDING ({ratio}x)"
+        elif ratio > 1.2:
+            state = "DECAYING" # Dissipating momentum
+            is_ignition = False
+            badge = f"⏳ Hawkes: DECAYING ({ratio}x)"
+        else:
+            state = "DORMANT"
+            is_ignition = False
+            badge = f"Hawkes: DORMANT ({ratio}x)"
+
+        return {
+            "intensity": round(intensity, 3),
+            "baseline": round(mu, 3),
+            "ratio": ratio,
+            "state": state,
+            "is_ignition": is_ignition,
+            "active_shocks": active_events,
+            "distinct_publishers": distinct_pubs,
+            "badge": badge
+        }
+
+    def derive_causal_pathway(self, text: str, cluster_idx: int = 0) -> Dict[str, Any]:
+        """
+        Traces the shortest real-world sovereign macro transmission pipeline to Gold (XAUUSD):
+        - Pipeline 1: Kinetic Chokepoint & Physical Supply
+        - Pipeline 2: Sovereign Liquidity & Real Yield Vectors
+        - Pipeline 3: Monetary Debasement & Reserve Flows
+        """
+        text_lower = text.lower()
+        
+        # Pipeline 1 keywords
+        p1_kw = ['tanker', 'strait', 'hormuz', 'bab-el-mandeb', 'red sea', 'suez', 'missile', 
+                 'strike', 'drone', 'pipeline', 'crude', 'oil', 'reroute', 'insurance', 'war risk', 
+                 'houthi', 'iran', 'gulf', 'yemen', 'airspace', 'chokepoint']
+        # Pipeline 2 keywords
+        p2_kw = ['discount window', 'liquidity', 'bank', 'reverse repo', 'yield', 'treasury', 
+                 'debt', 'fed', 'ecb', 'boe', 'rate hike', 'rate cut', 'spread', 'margin', 
+                 'credit', 'collateral', 'interbank', 'inflation', 'cpi', 'interest rate']
+        # Pipeline 3 keywords
+        p3_kw = ['debasement', 'reserve', 'pboc', 'gold reserve', 'sanctions', 'dedollarization', 
+                 'auction tail', 'bid-to-cover', 'fiscal dominance', 'dollar index', 'dxy', 'sovereign debt']
+
+        score_p1 = sum(1 for kw in p1_kw if kw in text_lower)
+        score_p2 = sum(1 for kw in p2_kw if kw in text_lower)
+        score_p3 = sum(1 for kw in p3_kw if kw in text_lower)
+
+        if score_p1 >= max(score_p2, score_p3, 1):
+            pipeline = "KINETIC_CHOKEPOINT"
+            pipe_name = "Pipeline 1: Kinetic Chokepoint & Physical Supply"
+            transmission = "Kinetic Disruption ➔ Fleet Diversion ➔ Crude Freight Shock ➔ Haven Expansion"
+            gold_bias = "BULLISH_SAFE_HAVEN"
+            inflection_minutes = (8, 20)
+        elif score_p2 >= max(score_p1, score_p3, 1):
+            pipeline = "SOVEREIGN_LIQUIDITY"
+            pipe_name = "Pipeline 2: Sovereign Liquidity & Real Yield Vectors"
+            transmission = "Credit / Yield Repricing ➔ Dollar Liquidity Scramble ➔ Initial Flush ➔ Sustained Debasement Bid"
+            gold_bias = "VOLATILITY_EXPANSION"
+            inflection_minutes = (15, 35)
+        elif score_p3 >= max(score_p1, score_p2, 1):
+            pipeline = "CURRENCY_DEBASEMENT"
+            pipe_name = "Pipeline 3: Monetary Debasement & Reserve Flows"
+            transmission = "Fiscal Dominance Escalation ➔ Foreign Central Bank Bullion Accumulation ➔ Direct Cash Floor"
+            gold_bias = "STRUCTURAL_BULLISH_FLOOR"
+            inflection_minutes = (20, 45)
+        else:
+            if cluster_idx == 2:
+                pipeline = "KINETIC_CHOKEPOINT"
+                pipe_name = "Pipeline 1: Kinetic Chokepoint & Physical Supply"
+                transmission = "Regional Flashpoint ➔ Risk Premium Transmission ➔ Safe Haven Bid"
+                gold_bias = "BULLISH_SAFE_HAVEN"
+                inflection_minutes = (10, 25)
+            elif cluster_idx == 0:
+                pipeline = "CURRENCY_DEBASEMENT"
+                pipe_name = "Pipeline 3: Monetary Debasement & Reserve Flows"
+                transmission = "Sovereign Debt Issuance ➔ Central Bank Absorption ➔ Monetary Depreciation"
+                gold_bias = "STRUCTURAL_BULLISH_FLOOR"
+                inflection_minutes = (20, 45)
+            else:
+                pipeline = "INTERMARKET_FLOW"
+                pipe_name = "Pipeline 4: Intermarket Flow Balancing"
+                transmission = "FX / Yield Dislocation ➔ Multi-Asset Rebalancing ➔ Tape Liquidity Absorption"
+                gold_bias = "EQUILIBRIUM_SEEKING"
+                inflection_minutes = (12, 30)
+
+        return {
+            "pipeline": pipeline,
+            "pipeline_name": pipe_name,
+            "transmission_chain": transmission,
+            "expected_gold_impact": gold_bias,
+            "inflection_window_min": inflection_minutes[0],
+            "inflection_window_max": inflection_minutes[1],
+            "inflection_summary": f"Expected tape response within {inflection_minutes[0]}-{inflection_minutes[1]} mins"
+        }
+
     def calculate_attention_divergence(self, wire_z_scores: List[float], crowd_z_scores: List[float]) -> Dict[str, Any]:
         """
         Quantifies the information velocity gap between institutional wires and crowd search queries:
