@@ -391,6 +391,19 @@ class TopologyEngine:
             self.phrase_sources.pop(p, None)
             self.phrase_contexts.pop(p, None)
 
+        # 4. Graph Density Clamping (Guarantees silky smooth 60 FPS in D3 canvas)
+        MAX_NODES = 350
+        if len(self.nodes) > MAX_NODES:
+            non_god_nodes = [(nid, data.get("z_score", 0.0) * self.token_mentions.get(nid, 1)) 
+                             for nid, data in self.nodes.items() if not data.get("is_god")]
+            non_god_nodes.sort(key=lambda x: x[1], reverse=True)
+            excess = set(nid for nid, _ in non_god_nodes[MAX_NODES - 5:])
+            for nid in excess:
+                self.nodes.pop(nid, None)
+            d_edges = [k for k in self.edges.keys() if k[0] in excess or k[1] in excess]
+            for k in d_edges:
+                self.edges.pop(k, None)
+
     def export_graph_json(self) -> Dict[str, Any]:
         self.prune_and_decay()
         degrees, hops_to_god, _ = self._compute_graph_topology()
