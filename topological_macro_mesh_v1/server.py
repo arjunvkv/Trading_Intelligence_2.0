@@ -17,7 +17,6 @@ import os
 from collectors import DataCollector
 from topology import TopologyEngine
 from lead_arbiter import LeadArbiter
-from trade_arbiter import DualKeyTradeArbiter
 
 PORT = 8080
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -27,7 +26,6 @@ class EngineService:
         self.collector = DataCollector()
         self.topology = TopologyEngine()
         self.arbiter = LeadArbiter()
-        self.trade_arbiter = DualKeyTradeArbiter()
         self.is_running = True
         self.latest_graph = {}
         cache_file = os.path.join(BASE_DIR, "live_graph.json")
@@ -68,15 +66,14 @@ class EngineService:
             crowd_z = [n["z_score"] for n in self.latest_graph.get("nodes", []) if n.get("cluster") in [4] and not n.get("is_god")]
             att_div = self.arbiter.calculate_attention_divergence(wire_z, crowd_z)
 
-            # 5. Dual-Key Trade Arbitration
-            surging = [n for n in self.latest_graph.get("nodes", []) if n.get("is_surging")]
-            lead_tel = self.arbiter.evaluate_shock_telemetry("Sovereign & Central Banks", 0.0, 1, wire_z, crowd_z)
-            self.latest_decision = self.trade_arbiter.evaluate_dual_key_setup(surging, att_div, lead_tel)
-            
-            if self.latest_decision.get("decision") == "DISPATCHED_TELEGRAM_PROPOSAL":
-                print(f"[DUAL-KEY ALERT DISPATCHED] Proposal sent to Telegram: {self.latest_decision.get('proposal', {}).get('order_type')} @ {self.latest_decision.get('proposal', {}).get('entry_price')}")
-            else:
-                print(f"[DUAL-KEY ARBITER] {self.latest_decision.get('decision')}: {self.latest_decision.get('reason', 'Equilibrium')}")
+            self.latest_decision = {
+                "status": "MACRO_INTELLIGENCE_ACTIVE",
+                "attention_regime": att_div.get("attention_regime", "STRUCTURAL_EQUILIBRIUM"),
+                "lead_quality": att_div.get("lead_quality", "NEUTRAL"),
+                "wire_velocity_z": att_div.get("wire_velocity_z", 0.0),
+                "crowd_velocity_z": att_div.get("crowd_velocity_z", 0.0),
+                "divergence_delta": att_div.get("divergence_delta", 0.0)
+            }
 
             # Save state to local file
             with open(os.path.join(BASE_DIR, "live_graph.json"), "w", encoding="utf-8") as f:

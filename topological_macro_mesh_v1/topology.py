@@ -58,6 +58,8 @@ class TopologyEngine:
         self.phrase_contexts = defaultdict(list)
         self.phrase_doc_counts = defaultdict(int) # Background document frequency
         self.total_docs_seen = 0
+        self.gold_docs_seen = 0
+        self.gold_co_occurrences = defaultdict(int)
         self.seen_items = {} # Cache (publisher, text) -> last_seen_ts to prevent duplicate poll timestamp spam
         
         self.edges = {}
@@ -189,13 +191,44 @@ class TopologyEngine:
                         self.edges[key]["weight"] = min(3.0, self.edges[key]["weight"] + 0.3)
                         self.edges[key]["last_seen"] = now
 
-            # 4. Natural Gold Linkage (Zero Forced Edges)
-            # If headline naturally touches precious metals, link to god_xau
+            # 4. Empirical Natural Gold Linkage (Pointwise Mutual Information - PMI)
+            # Forms dynamic mathematical association without forced weights or single-token bugs
             article_lower = " " + text.lower() + " "
-            if any(k in article_lower for k in [' gold ', ' bullion ', ' xau ', ' comex ', ' sge ', ' precious metal ']):
-                primary_word = tokens[0]
-                edge_key = tuple(sorted([primary_word, "god_xau"]))
-                self.edges[edge_key] = {"weight": 2.2, "last_seen": now, "te": 0.85}
+            is_gold_doc = any(k in article_lower for k in [' gold ', ' bullion ', ' xau ', ' comex ', ' sge ', ' precious metal '])
+            if is_gold_doc:
+                if is_new_item:
+                    self.gold_docs_seen += 1
+                
+                total_docs = max(10, self.total_docs_seen)
+                p_gold = max(1, self.gold_docs_seen) / total_docs
+
+                # Form statistical linkage with all high-salience tokens in the document
+                for tok in tokens[:4]:
+                    if tok == "god_xau" or len(tok) < 3:
+                        continue
+                    if is_new_item:
+                        self.gold_co_occurrences[tok] += 1
+                    
+                    co_count = self.gold_co_occurrences[tok]
+                    tok_mentions = max(1, self.token_mentions.get(tok, 1))
+                    
+                    p_tok = tok_mentions / total_docs
+                    p_joint = max(1, co_count) / total_docs
+                    
+                    # Pointwise Mutual Information: PMI(tok, gold) = ln( P(tok, gold) / (P(tok) * P(gold)) )
+                    raw_pmi = math.log(max(1e-5, p_joint / (p_tok * p_gold)))
+                    npmi = max(0.0, min(1.0, (raw_pmi + 2.0) / 4.0)) # Normalized between 0 and 1
+                    
+                    dynamic_weight = round(max(0.6, min(3.0, 0.8 + (npmi * 2.0))), 2)
+                    dynamic_te = round(max(0.30, min(0.92, 0.40 + (npmi * 0.45))), 2)
+                    
+                    edge_key = tuple(sorted([tok, "god_xau"]))
+                    if edge_key not in self.edges:
+                        self.edges[edge_key] = {"weight": dynamic_weight, "last_seen": now, "te": dynamic_te}
+                    elif is_new_item:
+                        self.edges[edge_key]["weight"] = dynamic_weight
+                        self.edges[edge_key]["te"] = dynamic_te
+                        self.edges[edge_key]["last_seen"] = now
 
     def _discover_communities(self) -> Dict[int, List[str]]:
         """
@@ -333,8 +366,11 @@ class TopologyEngine:
             # 1. Hawkes Ignition Point Process (Self-Exciting Acceleration)
             hawkes = self.lead_arbiter.compute_hawkes_ignition(timestamps, list(publishers), now=now)
 
-            # 2. Sovereign Causal Transmission Pathway (Zero fabricated kinetic strikes on crowd queries)
-            causal = self.lead_arbiter.derive_causal_pathway(context_headline, is_crowd_only=is_pure_crowd)
+            # 2. Sovereign Causal Transmission Pathway (derived from topological realm origin)
+            p_tokens = phrase.split()
+            cand_clusters = [self.nodes[t]["cluster"] for t in p_tokens if t in self.nodes]
+            cand_cluster = max(set(cand_clusters), key=cand_clusters.count) if cand_clusters else 0
+            causal = self.lead_arbiter.derive_causal_pathway(context_headline, cluster_idx=cand_cluster, is_crowd_only=is_pure_crowd)
 
             # 3. Attention Divergence Asymmetry (Wires vs Crowd)
             is_wire = phrase in self.wire_phrases

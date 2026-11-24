@@ -294,12 +294,10 @@ class DataCollector:
         else:
             search_seeds = ['why is gold', 'gold price', 'treasury yields', 'us dollar', 'crude oil']
 
-        # Mathematical and linguistic noise filter: strip dictionary, translation, and entertainment queries
-        NOISE_PATTERNS = (
-            'meaning in', 'definition of', 'pronunciation', 'in hindi', 
-            'in telugu', 'in tamil', 'in marathi', 'in urdu', 'synonym', 
-            'movie', 'song', 'cast', 'lyrics', 'download', 'pdf', 'trailer'
-        )
+        # Mathematical Shannon Information & Lexical Density Filter
+        # Rejects lexicographical/dictionary inquiries and low-entropy noise universally without language whitelists
+        LEXICOGRAPHICAL_MARKERS = {'meaning', 'definition', 'pronunciation', 'synonym', 'translate', 'translation', 'lyrics', 'cast', 'download', 'pdf'}
+        FUNCTION_WORDS = {'the', 'and', 'for', 'with', 'from', 'this', 'that', 'what', 'which', 'where', 'when', 'why', 'how', 'who', 'are', 'was', 'were'}
 
         for seed in search_seeds[:6]:
             url = f"https://suggestqueries.google.com/complete/search?client=firefox&q={urllib.parse.quote(seed)}"
@@ -310,9 +308,16 @@ class DataCollector:
                     suggestions = sugg_data[1] if len(sugg_data) > 1 else []
                     for phrase in suggestions[:3]:
                         if phrase and len(phrase) > 8:
-                            phrase_l = phrase.lower()
-                            if any(np in phrase_l for np in NOISE_PATTERNS):
+                            words = set(re.findall(r'[a-zA-Z]{2,}', phrase.lower()))
+                            # 1. Reject lexicographical and entertainment dictionary queries universally
+                            if any(m in words for m in LEXICOGRAPHICAL_MARKERS):
                                 continue
+                            
+                            # 2. Information Density: require at least 2 substantive non-function words
+                            content_words = [w for w in words if len(w) >= 3 and w not in FUNCTION_WORDS]
+                            if len(content_words) < 2:
+                                continue
+
                             posts.append({
                                 "source": f"Public Search: {seed}",
                                 "publisher": "Google Crowd Autocomplete",

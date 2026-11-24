@@ -17,38 +17,42 @@ class LeadArbiter:
     def __init__(self):
         pass
 
-    def get_active_session_conductivity(self) -> Dict[str, Any]:
-        """Calculates current market hours conductivity to XAUUSD."""
+    def get_active_session_conductivity(self, recent_event_count: int = None) -> Dict[str, Any]:
+        """
+        Calculates live market conductivity dynamically based on empirical event arrival flux λ(t),
+        grounded in active global session liquidity.
+        """
         utc_now = datetime.now(timezone.utc)
         hour = utc_now.hour
 
-        # London session: 08:00 - 16:30 UTC
-        # New York session: 13:00 - 21:00 UTC
-        # Asia / Tokyo session: 00:00 - 09:00 UTC
-        is_london = 8 <= hour < 17
-        is_ny = 13 <= hour < 21
-        is_asia = 0 <= hour < 9
-
-        if is_london and is_ny:
-            session_name = "London / NY Overlap (Peak Institutional Liquidity)"
-            conductivity = 0.95
-            lag_multiplier = 0.5 # Fast HFT transmission
-        elif is_ny:
-            session_name = "New York Active"
-            conductivity = 0.88
-            lag_multiplier = 0.7
-        elif is_london:
-            session_name = "London Active"
-            conductivity = 0.85
-            lag_multiplier = 0.8
-        elif is_asia:
-            session_name = "Asian Session (SGE / TOCOM Cash Dominance)"
-            conductivity = 0.65
-            lag_multiplier = 1.4 # Slower institutional rebalancing
+        # Base institutional session alignment
+        if 8 <= hour < 17 and 13 <= hour < 21:
+            session_name = "London / NY Overlap (Peak Global Liquidity)"
+            base_conduct = 0.90
+        elif 13 <= hour < 21:
+            session_name = "New York Session"
+            base_conduct = 0.82
+        elif 8 <= hour < 17:
+            session_name = "London Session"
+            base_conduct = 0.80
+        elif 0 <= hour < 9:
+            session_name = "Asian Session (SGE / TOCOM Cash)"
+            base_conduct = 0.65
         else:
-            session_name = "Off-Peak Interbank Drift"
-            conductivity = 0.40
-            lag_multiplier = 2.0
+            session_name = "Off-Peak Interbank Hours"
+            base_conduct = 0.45
+
+        # Empirical Poisson event flux λ(t): events per 15-minute rolling window
+        if recent_event_count is not None:
+            lam = max(1.0, float(recent_event_count))
+            # Sigmoid dynamic scaling of flux: higher event velocity increases conductivity
+            flux_modifier = 1.0 / (1.0 + math.exp(-0.12 * (lam - 12.0)))
+            conductivity = round(max(0.25, min(0.98, (base_conduct * 0.5) + (flux_modifier * 0.5))), 2)
+        else:
+            conductivity = base_conduct
+
+        # Dynamic lag multiplier inversely proportional to conductivity
+        lag_multiplier = round(max(0.45, min(2.5, 0.90 / max(0.20, conductivity))), 2)
 
         return {
             "session": session_name,
@@ -163,44 +167,31 @@ class LeadArbiter:
                 "inflection_summary": "Retail crowd curiosity; unconfirmed on sovereign institutional wires"
             }
 
-        # 2. Genuine institutional wire transmission pathways
-        p1_kw = ['tanker', 'strait', 'hormuz', 'bab-el-mandeb', 'red sea', 'suez', 'missile', 
-                 'strike', 'drone', 'pipeline', 'crude', 'oil', 'reroute', 'insurance', 'war risk', 
-                 'houthi', 'iran', 'gulf', 'yemen', 'airspace']
-        p2_kw = ['discount window', 'liquidity', 'bank', 'reverse repo', 'yield', 'treasury', 
-                 'debt', 'fed', 'ecb', 'boe', 'rate hike', 'rate cut', 'spread', 'margin', 
-                 'credit', 'collateral', 'interbank', 'inflation', 'cpi', 'interest rate']
-        p3_kw = ['debasement', 'reserve', 'pboc', 'gold reserve', 'sanctions', 'dedollarization', 
-                 'auction tail', 'bid-to-cover', 'fiscal dominance', 'dollar index', 'dxy', 'sovereign debt']
-
-        score_p1 = sum(1 for kw in p1_kw if kw in text_lower)
-        score_p2 = sum(1 for kw in p2_kw if kw in text_lower)
-        score_p3 = sum(1 for kw in p3_kw if kw in text_lower)
-
-        if score_p1 >= max(score_p2, score_p3, 1):
-            pipeline = "GEOPOLITICAL_SUPPLY_VECTOR"
-            pipe_name = "Geopolitical & Physical Supply Vector"
-            transmission = "Physical Supply / Shipping Dislocation ➔ Safe-Haven Risk Premium Expansion"
-            gold_bias = "SAFE_HAVEN_EXPANSION"
-            inflection_minutes = (8, 20)
-        elif score_p2 >= max(score_p1, score_p3, 1):
-            pipeline = "SOVEREIGN_LIQUIDITY"
-            pipe_name = "Pipeline 2: Sovereign Liquidity & Real Yield Vector"
-            transmission = "Yield Curve / Credit Repricing ➔ Real Yield Opportunity Cost Transmission"
-            gold_bias = "VOLATILITY_EXPANSION"
-            inflection_minutes = (15, 35)
-        elif score_p3 >= max(score_p1, score_p2, 1):
-            pipeline = "CURRENCY_DEBASEMENT"
-            pipe_name = "Pipeline 3: Monetary Debasement & Reserve Vector"
-            transmission = "Fiscal Dominance / Sovereign Debt Expansion ➔ Central Bank Bullion Accumulation Floor"
+        # 2. Genuine institutional transmission pathways derived from topological realm origin
+        if cluster_idx == 0:
+            pipeline = "SOVEREIGN_MONETARY_VECTOR"
+            pipe_name = "Sovereign Fiscal & Liquidity Realm"
+            transmission = "Fiscal Dominance & Central Bank Reserves ➔ Sovereign Bullion Floor"
             gold_bias = "STRUCTURAL_DEBASEMENT_BID"
-            inflection_minutes = (20, 45)
+            inflection_minutes = (15, 40)
+        elif cluster_idx == 2:
+            pipeline = "GEOPOLITICAL_KINETIC_VECTOR"
+            pipe_name = "Geopolitical & Physical Supply Realm"
+            transmission = "Trade Disruption & Conflict Escalation ➔ Safe-Haven Risk Premium Expansion"
+            gold_bias = "SAFE_HAVEN_EXPANSION"
+            inflection_minutes = (8, 25)
+        elif cluster_idx == 1:
+            pipeline = "INTERMARKET_YIELD_VECTOR"
+            pipe_name = "Intermarket Yield & Dollar Realm"
+            transmission = "Real Yields & FX Transmission ➔ Opportunity Cost Repricing"
+            gold_bias = "VOLATILITY_EXPANSION"
+            inflection_minutes = (10, 30)
         else:
-            pipeline = "INTERMARKET_FLOW"
-            pipe_name = "Pipeline 4: Structural Intermarket Equilibrium"
-            transmission = "Macro Equilibrium Transmission ➔ Tape Liquidity Absorption"
+            pipeline = "STRUCTURAL_EQUILIBRIUM"
+            pipe_name = "Macro Structural Equilibrium"
+            transmission = "Empirical Macro Diffusion ➔ Tape Liquidity Absorption"
             gold_bias = "EQUILIBRIUM_SEEKING"
-            inflection_minutes = (12, 30)
+            inflection_minutes = (12, 35)
 
         return {
             "pipeline": pipeline,
