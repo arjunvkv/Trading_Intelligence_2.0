@@ -166,7 +166,7 @@ class LeadArbiter:
         # 2. Genuine institutional wire transmission pathways
         p1_kw = ['tanker', 'strait', 'hormuz', 'bab-el-mandeb', 'red sea', 'suez', 'missile', 
                  'strike', 'drone', 'pipeline', 'crude', 'oil', 'reroute', 'insurance', 'war risk', 
-                 'houthi', 'iran', 'gulf', 'yemen', 'airspace', 'chokepoint']
+                 'houthi', 'iran', 'gulf', 'yemen', 'airspace']
         p2_kw = ['discount window', 'liquidity', 'bank', 'reverse repo', 'yield', 'treasury', 
                  'debt', 'fed', 'ecb', 'boe', 'rate hike', 'rate cut', 'spread', 'margin', 
                  'credit', 'collateral', 'interbank', 'inflation', 'cpi', 'interest rate']
@@ -178,8 +178,8 @@ class LeadArbiter:
         score_p3 = sum(1 for kw in p3_kw if kw in text_lower)
 
         if score_p1 >= max(score_p2, score_p3, 1):
-            pipeline = "KINETIC_CHOKEPOINT"
-            pipe_name = "Pipeline 1: Geopolitical & Physical Supply Vector"
+            pipeline = "GEOPOLITICAL_SUPPLY_VECTOR"
+            pipe_name = "Geopolitical & Physical Supply Vector"
             transmission = "Physical Supply / Shipping Dislocation ➔ Safe-Haven Risk Premium Expansion"
             gold_bias = "SAFE_HAVEN_EXPANSION"
             inflection_minutes = (8, 20)

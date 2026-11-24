@@ -209,25 +209,31 @@ class DataCollector:
         items.extend(self.fetch_rss_items("https://news.google.com/rss/headlines/section/topic/BUSINESS", "Global Business Wire", max_items=8))
         return items
 
-    def fetch_wikipedia_crowd_pageviews(self) -> List[Dict[str, str]]:
-        """Wikimedia Public Attention API: measures real-time crowd research on sovereign & crisis nodes."""
+    def fetch_wikipedia_crowd_pageviews(self, dynamic_topics: List[str] = None) -> List[Dict[str, str]]:
+        """Wikimedia Public Attention API: measures real-time crowd research on dynamic emerging macro nodes."""
         posts = []
-        articles = [
-            ("Strait_of_Hormuz", "Hormuz Chokepoint"),
-            ("Bab-el-Mandeb", "Bab el-Mandeb Chokepoint"),
-            ("Gold_as_an_investment", "Gold Reserve Demand"),
-            ("Federal_Reserve", "Federal Reserve Liquidity"),
-            ("Red_Sea_crisis", "Red Sea Disruption"),
-            ("Sovereign_debt", "Sovereign Debt Risk"),
-            ("Inflation", "Inflationary Pressure")
-        ]
+        if not dynamic_topics:
+            topics = [
+                ("Gold", "Gold Bullion"),
+                ("Treasury_security", "US Treasuries"),
+                ("Petroleum", "Crude Oil"),
+                ("Central_bank", "Central Banks"),
+                ("Federal_Reserve", "Federal Reserve")
+            ]
+        else:
+            topics = []
+            for t in dynamic_topics:
+                if not t or len(t) < 3 or t.isdigit():
+                    continue
+                clean_art = t.strip().replace(" ", "_").capitalize()
+                topics.append((clean_art, t.strip().title()))
 
         end_dt = datetime.utcnow() - timedelta(days=1)
         start_dt = datetime.utcnow() - timedelta(days=3)
         start_str = start_dt.strftime("%Y%m%d00")
         end_str = end_dt.strftime("%Y%m%d00")
 
-        for art, label in articles:
+        for art, label in topics[:6]:
             url = f"https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/en.wikipedia.org/all-access/all-agents/{art}/daily/{start_str}/{end_str}"
             raw = self._fetch_safe(url, f"Wikimedia: {label}", timeout=5, custom_headers=self.wiki_headers)
             if raw:
@@ -239,7 +245,7 @@ class DataCollector:
                         curr_v = items[-1]['views']
                         growth = ((curr_v - prev_v) / max(1, prev_v)) * 100.0
                         sign = "+" if growth >= 0 else ""
-                        desc = f"Wikipedia Public Research Pulse: {label} ({curr_v:,} daily inquiries, {sign}{growth:.1f}% velocity)"
+                        desc = f"Wikipedia Attention: {label} ({curr_v:,} daily inquiries, {sign}{growth:.1f}% velocity)"
                         posts.append({
                             "source": f"Wikimedia: {label}",
                             "publisher": "Wikipedia Public Attention",
@@ -248,6 +254,7 @@ class DataCollector:
                 except Exception:
                     pass
         return posts
+
 
     def fetch_federated_mastodon_squawks(self) -> List[Dict[str, str]]:
         """Multi-instance federated open squawks across academic economics, energy, and geopolitics."""
@@ -278,22 +285,34 @@ class DataCollector:
                     pass
         return posts
 
-    def fetch_public_search_trajectories(self) -> List[Dict[str, str]]:
+    def fetch_public_search_trajectories(self, dynamic_seeds: List[str] = None) -> List[Dict[str, str]]:
         """Dynamic real-world search autocomplete trajectories revealing active public inquiries."""
         posts = []
-        search_seeds = [
-            'why is gold', 'why is dollar', 'hormuz', 'airspace', 
-            'sanctions', 'bank liquidity', 'treasury yields', 
-            'crude oil supply', 'central bank gold', 'red sea shipping'
-        ]
-        for seed in search_seeds:
+        if dynamic_seeds:
+            search_seeds = [s for s in dynamic_seeds if len(s) >= 3 and not s.isdigit()][:4]
+            search_seeds.extend(['gold price', 'treasury yields', 'us dollar'])
+        else:
+            search_seeds = ['why is gold', 'gold price', 'treasury yields', 'us dollar', 'crude oil']
+
+        # Mathematical and linguistic noise filter: strip dictionary, translation, and entertainment queries
+        NOISE_PATTERNS = (
+            'meaning in', 'definition of', 'pronunciation', 'in hindi', 
+            'in telugu', 'in tamil', 'in marathi', 'in urdu', 'synonym', 
+            'movie', 'song', 'cast', 'lyrics', 'download', 'pdf', 'trailer'
+        )
+
+        for seed in search_seeds[:6]:
             url = f"https://suggestqueries.google.com/complete/search?client=firefox&q={urllib.parse.quote(seed)}"
             raw_sugg = self._fetch_safe(url, f"Crowd Suggest: {seed}", timeout=4)
             if raw_sugg:
                 try:
                     sugg_data = json.loads(raw_sugg.decode('utf-8', errors='ignore'))
-                    for phrase in sugg_data[1][:3]:
+                    suggestions = sugg_data[1] if len(sugg_data) > 1 else []
+                    for phrase in suggestions[:3]:
                         if phrase and len(phrase) > 8:
+                            phrase_l = phrase.lower()
+                            if any(np in phrase_l for np in NOISE_PATTERNS):
+                                continue
                             posts.append({
                                 "source": f"Public Search: {seed}",
                                 "publisher": "Google Crowd Autocomplete",
@@ -303,12 +322,12 @@ class DataCollector:
                     pass
         return posts
 
-    def fetch_crowd_squawks_and_queries(self) -> List[Dict[str, str]]:
+    def fetch_crowd_squawks_and_queries(self, dynamic_seeds: List[str] = None) -> List[Dict[str, str]]:
         """Aggregates all crowd sources: Wikipedia Attention, Federated Mastodon, and Search Trajectories."""
         posts = []
-        posts.extend(self.fetch_wikipedia_crowd_pageviews())
+        posts.extend(self.fetch_wikipedia_crowd_pageviews(dynamic_topics=dynamic_seeds))
         posts.extend(self.fetch_federated_mastodon_squawks())
-        posts.extend(self.fetch_public_search_trajectories())
+        posts.extend(self.fetch_public_search_trajectories(dynamic_seeds=dynamic_seeds))
         return posts
 
     def get_health_status(self) -> Dict[str, Any]:
@@ -339,12 +358,12 @@ class DataCollector:
             "states": list(self.source_states.values())
         }
 
-    def fetch_all(self) -> Dict[str, Any]:
+    def fetch_all(self, dynamic_seeds: List[str] = None) -> Dict[str, Any]:
         """Aggregate all streams safely with full error and rate-limit tracking."""
         sovereign = self.fetch_sovereign_wires()
         geopolitical = self.fetch_geopolitical_precursor_wires()
         market = self.fetch_intermarket_wires()
-        crowd = self.fetch_crowd_squawks_and_queries()
+        crowd = self.fetch_crowd_squawks_and_queries(dynamic_seeds=dynamic_seeds)
         health = self.get_health_status()
 
         return {

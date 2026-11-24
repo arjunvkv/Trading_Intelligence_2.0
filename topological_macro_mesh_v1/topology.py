@@ -137,9 +137,12 @@ class TopologyEngine:
                     self.token_first_seen[t] = now
                 self.token_publishers[t].add(publisher)
                 self.token_sources[t].add(source)
-                self.token_mentions[t] += 1
-                self.token_history[t].append(now)
-                self.token_trigger[t] = (text[:140], publisher)
+                
+                # ONLY update frequency and timestamps if this is a genuinely new headline/item
+                if is_new_item:
+                    self.token_mentions[t] += 1
+                    self.token_history[t].append(now)
+                    self.token_trigger[t] = (text[:140], publisher)
                 
                 self.token_history[t] = [ts for ts in self.token_history[t] if now - ts < 7200]
 
@@ -159,15 +162,20 @@ class TopologyEngine:
                     is_surging = (z >= 6.0 and pub_count >= 2)
 
                 label = publisher.split()[0] + ": " + t.capitalize()
+                
+                # ONLY refresh last_seen if this is a new item, or if node doesn't exist yet!
+                existing_last_seen = self.nodes[t]["last_seen"] if t in self.nodes else now
+                node_last_seen = now if is_new_item else existing_last_seen
+
                 self.nodes[t] = {
                     "cluster": cluster_idx,
                     "label": label[:34],
-                    "last_seen": now,
+                    "last_seen": node_last_seen,
                     "z_score": round(z, 2),
                     "is_surging": is_surging,
                     "r": 5.2 if is_surging else 3.2,
-                    "trigger_text": text[:140],
-                    "trigger_source": publisher
+                    "trigger_text": text[:140] if is_new_item else self.nodes.get(t, {}).get("trigger_text", text[:140]),
+                    "trigger_source": publisher if is_new_item else self.nodes.get(t, {}).get("trigger_source", publisher)
                 }
 
             # 3. Form Co-Occurrence Edges (Empirical Association)
@@ -177,7 +185,7 @@ class TopologyEngine:
                     key = (t1, t2)
                     if key not in self.edges:
                         self.edges[key] = {"weight": 0.6, "last_seen": now, "te": 0.35}
-                    else:
+                    elif is_new_item:
                         self.edges[key]["weight"] = min(3.0, self.edges[key]["weight"] + 0.3)
                         self.edges[key]["last_seen"] = now
 
@@ -224,6 +232,26 @@ class TopologyEngine:
                     c_idx += 1
 
         return communities
+
+    def get_surging_entities(self, top_k: int = 5) -> List[str]:
+        """
+        Returns dynamic surging entities/tokens from the graph (high z-score, multi-publisher).
+        Excludes god anchor nodes, numbers, and stopwords.
+        Used to dynamically steer crowd collection without hardcoded seed lists.
+        """
+        candidates = []
+        for nid, data in self.nodes.items():
+            if data.get("is_god") or not isinstance(nid, str) or len(nid) < 3 or nid.isdigit():
+                continue
+            z = data.get("z_score", 0.0)
+            pubs = len(self.token_publishers.get(nid, set()))
+            mentions = self.token_mentions.get(nid, 1)
+            # Prioritize real multi-publisher backing and mathematical surge
+            score = z * math.log(1 + mentions) * (1.5 if pubs >= 2 else 1.0)
+            candidates.append((nid, score, z, pubs))
+        
+        candidates.sort(key=lambda x: x[1], reverse=True)
+        return [c[0] for c in candidates[:top_k]]
 
     def extract_emerging_constellations(self, top_k: int = 5) -> List[Dict[str, Any]]:
         """

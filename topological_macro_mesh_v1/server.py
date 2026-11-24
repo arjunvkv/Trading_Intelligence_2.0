@@ -42,8 +42,9 @@ class EngineService:
     def cycle(self):
         """Single discovery, topology update, and Dual-Key arbiter cycle with 100% genuine data."""
         try:
-            # 1. Fetch real unmanipulated streams
-            snapshot = self.collector.fetch_all()
+            # 1. Fetch real unmanipulated streams with dynamic closed-loop steering from graph
+            dynamic_seeds = self.topology.get_surging_entities(top_k=5)
+            snapshot = self.collector.fetch_all(dynamic_seeds=dynamic_seeds)
             
             # 2. Ingest into topology via the 3 Macro Realms
             # Sovereign & Central Banks (Cluster 0) -> god_debase
