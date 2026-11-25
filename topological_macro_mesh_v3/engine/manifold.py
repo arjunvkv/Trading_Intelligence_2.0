@@ -54,6 +54,7 @@ class TopologicalManifold:
         self.active_cascades: List[List[str]] = []
         self.precursor_clues: List[Dict[str, Any]] = []
         self.processed_doc_keys: Set[str] = set()
+        self.extracted_entities_cache: Dict[str, List[Dict[str, Any]]] = {}
 
     def ingest_document(self, doc: Dict[str, Any]) -> List[str]:
         """
@@ -216,7 +217,10 @@ class TopologicalManifold:
         """
         now = time.time()
         valid_docs = []
-        texts = []
+        uncached_docs = []
+        uncached_texts = []
+        doc_keys = []
+
         for d in docs:
             doc_age = d.get("age_sec")
             if doc_age is not None and doc_age > 48.0 * 3600.0:
@@ -227,28 +231,39 @@ class TopologicalManifold:
             if len(text) < 6:
                 continue
 
-            # Document deduplication: skip if already ingested
             doc_key = d.get("link") or (title.lower() + "_" + str(d.get("publisher", "")).lower())
-            if doc_key in self.processed_doc_keys:
-                continue
-            self.processed_doc_keys.add(doc_key)
             valid_docs.append(d)
-            texts.append(text)
+            doc_keys.append(doc_key)
 
-        # Prevent unbounded set growth
-        if len(self.processed_doc_keys) > 20000:
-            self.processed_doc_keys = set(list(self.processed_doc_keys)[-10000:])
+            if doc_key not in self.extracted_entities_cache:
+                uncached_docs.append((doc_key, d))
+                uncached_texts.append(text)
+
+        # Run batch GLiNER ONLY for brand-new, uncached documents
+        if uncached_texts:
+            new_batch_entities = self.extractor.batch_extract_entities(uncached_texts, threshold=0.35, batch_size=32)
+            for (key, _), ents in zip(uncached_docs, new_batch_entities):
+                self.extracted_entities_cache[key] = ents
+
+        # Cache bound limit
+        if len(self.extracted_entities_cache) > 25000:
+            keys_to_remove = list(self.extracted_entities_cache.keys())[:10000]
+            for k in keys_to_remove:
+                self.extracted_entities_cache.pop(k, None)
 
         if not valid_docs:
             return 0
 
-        # Run batch entity extraction
-        batch_entities = self.extractor.batch_extract_entities(texts, threshold=0.35, batch_size=32)
-
         accepted_count = 0
-        for doc, entities in zip(valid_docs, batch_entities):
+        for doc, doc_key in zip(valid_docs, doc_keys):
+            entities = self.extracted_entities_cache.get(doc_key, [])
             if not entities:
                 continue
+
+            is_new_arrival = doc_key not in self.processed_doc_keys
+            if is_new_arrival:
+                self.processed_doc_keys.add(doc_key)
+
             title = doc.get("title", "").strip()
             summary = doc.get("summary", "").strip()
             text = f"{title}. {summary}" if summary else title
@@ -294,15 +309,16 @@ class TopologicalManifold:
             # Update nodes
             for name in entity_names:
                 category = entity_category_map.get(name, source_type)
-                if name not in self.entity_occurrences:
-                    self.entity_occurrences[name] = []
-                self.entity_occurrences[name].append(now)
+                if is_new_arrival:
+                    if name not in self.entity_occurrences:
+                        self.entity_occurrences[name] = []
+                    self.entity_occurrences[name].append(now)
 
-                if name not in self.entity_publishers:
-                    self.entity_publishers[name] = set()
-                self.entity_publishers[name].add(publisher)
+                    if name not in self.entity_publishers:
+                        self.entity_publishers[name] = set()
+                    self.entity_publishers[name].add(publisher)
 
-                self.surprisal.register_entity(name)
+                    self.surprisal.register_entity(name)
 
                 wire_record = {
                     "title": title,
@@ -331,8 +347,10 @@ class TopologicalManifold:
                     }
                 else:
                     node = self.nodes[name]
+                    # Keep node active while article is in 48-hour feed horizon
                     node["last_updated"] = now
-                    node["observation_count"] += 1
+                    if is_new_arrival:
+                        node["observation_count"] += 1
                     if "wire_history" not in node:
                         node["wire_history"] = []
                     if title:
@@ -354,12 +372,17 @@ class TopologicalManifold:
                         continue
                     pair1 = (u, v)
                     pair2 = (v, u)
-                    self.edge_weights[pair1] = self.edge_weights.get(pair1, 0.0) + 1.0
-                    self.edge_weights[pair2] = self.edge_weights.get(pair2, 0.0) + 1.0
+                    if is_new_arrival:
+                        self.edge_weights[pair1] = self.edge_weights.get(pair1, 0.0) + 1.0
+                        self.edge_weights[pair2] = self.edge_weights.get(pair2, 0.0) + 1.0
                     self.edge_timestamps[pair1] = now
                     self.edge_timestamps[pair2] = now
 
             accepted_count += 1
+
+        # Prevent unbounded processed_doc_keys growth
+        if len(self.processed_doc_keys) > 25000:
+            self.processed_doc_keys = set(list(self.processed_doc_keys)[-10000:])
 
         return accepted_count
 

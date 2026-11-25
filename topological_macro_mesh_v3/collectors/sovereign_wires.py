@@ -17,14 +17,14 @@ class SovereignWiresCollector:
         {"name": "Federal Reserve Monetary Policy", "url": "https://www.federalreserve.gov/feeds/press_monetary.xml"},
         {"name": "European Central Bank", "url": "https://www.ecb.europa.eu/rss/press.html"},
         {"name": "Bank of England News", "url": "https://www.bankofengland.co.uk/rss/news"},
-        {"name": "Bank of Japan Releases", "url": "https://www.boj.or.jp/en/rss/whatsnew.xml"},
+        {"name": "Bank of Japan Releases", "url": "https://news.google.com/rss/search?q=%22Bank+of+Japan%22+OR+%22Kazuo+Ueda%22+OR+%22BOJ+policy+rate%22+OR+%22yen+carry+trade%22+when:2d&hl=en-US&gl=US&ceid=US:en"},
         {"name": "Bank for International Settlements BIS", "url": "https://news.google.com/rss/search?q=%22Bank+for+International+Settlements%22+OR+%22BIS+bulletin%22+OR+%22Basel+Committee%22+when:2d&hl=en-US&gl=US&ceid=US:en"},
         {"name": "International Monetary Fund IMF", "url": "https://news.google.com/rss/search?q=%22International+Monetary+Fund%22+OR+%22IMF+bailout%22+OR+%22SDR+reserves%22+when:2d&hl=en-US&gl=US&ceid=US:en"},
         {"name": "People's Bank of China / Macro Wires", "url": "https://news.google.com/rss/search?q=PBOC+OR+%22People%27s+Bank+of+China%22+OR+%22State+Administration+of+Foreign+Exchange%22+when:2d&hl=en-US&gl=US&ceid=US:en"},
         {"name": "Reserve Bank of India Sovereign", "url": "https://news.google.com/rss/search?q=%22Reserve+Bank+of+India%22+OR+%22RBI+monetary+policy%22+OR+%22forex+reserves%22+when:2d&hl=en-US&gl=US&ceid=US:en"},
         {"name": "Swiss National Bank SNB", "url": "https://news.google.com/rss/search?q=%22Swiss+National+Bank%22+OR+%22SNB+policy+rate%22+when:2d&hl=en-US&gl=US&ceid=US:en"},
-        {"name": "Bank of Canada", "url": "https://www.bankofcanada.ca/valet/rss/press-releases"},
-        {"name": "Reserve Bank of Australia", "url": "https://www.rba.gov.au/rss/rss-cb-bulletin.xml"},
+        {"name": "Bank of Canada", "url": "https://news.google.com/rss/search?q=%22Bank+of+Canada%22+OR+%22BoC+interest+rate%22+OR+%22Tiff+Macklem%22+when:2d&hl=en-CA&gl=CA&ceid=CA:en"},
+        {"name": "Reserve Bank of Australia", "url": "https://news.google.com/rss/search?q=%22Reserve+Bank+of+Australia%22+OR+%22RBA+cash+rate%22+OR+%22Michele+Bullock%22+when:2d&hl=en-AU&gl=AU&ceid=AU:en"},
         {"name": "Deutsche Bundesbank / Eurozone", "url": "https://news.google.com/rss/search?q=%22Bundesbank%22+OR+%22German+Bunds%22+OR+%22BTP+spread%22+when:2d&hl=en-US&gl=US&ceid=US:en"},
         {"name": "Monetary Authority of Singapore MAS", "url": "https://news.google.com/rss/search?q=%22Monetary+Authority+of+Singapore%22+OR+%22MAS+monetary+policy%22+when:2d&hl=en-US&gl=US&ceid=US:en"},
         {"name": "US Treasury Debt & Auctions", "url": "https://news.google.com/rss/search?q=%22US+Treasury%22+OR+%22Treasury+auction%22+OR+%22bid-to-cover%22+OR+%22Treasury+yields%22+OR+%22debt+ceiling%22+when:2d&hl=en-US&gl=US&ceid=US:en"},
@@ -33,14 +33,18 @@ class SovereignWiresCollector:
         {"name": "BRICS & De-Dollarization Architecture", "url": "https://news.google.com/rss/search?q=%22BRICS+Pay%22+OR+%22cross-border+settlement%22+OR+%22alternative+currency%22+OR+%22mBridge%22+when:2d&hl=en-US&gl=US&ceid=US:en"},
         {"name": "Emirates News Agency WAM Sovereign", "url": "https://news.google.com/rss/search?q=%22Emirates+News+Agency%22+OR+site:wam.ae+OR+%22UAE+central+bank%22+when:2d&hl=en-US&gl=US&ceid=US:en"},
         {"name": "Saudi Press Agency SPA Energy Desk", "url": "https://news.google.com/rss/search?q=%22Saudi+Press+Agency%22+OR+site:spa.gov.sa+OR+%22Saudi+Aramco%22+when:2d&hl=en-US&gl=US&ceid=US:en"},
-        {"name": "OECD Sovereign Debt & Borrowing", "url": "https://news.google.com/rss/search?q=%22OECD%22+OR+%22sovereign+borrowing%22+OR+%22global+debt+outlook%22+when:2d&hl=en-US&gl=US&ceid=US:en"}
+        {"name": "OECD Sovereign Debt & Borrowing", "url": "https://news.google.com/rss/search?q=%22OECD%22+OR+%22sovereign+borrowing%22+OR+%22global+debt+outlook%22+when:2d&hl=en-US&gl=US&ceid=US:en"},
+        {"name": "Global Gold & Bullion Vaults", "url": "https://news.google.com/rss/search?q=%22spot+gold%22+OR+%22gold+reserves%22+OR+%22central+bank+gold+buying%22+OR+%22XAUUSD%22+when:2d&hl=en-US&gl=US&ceid=US:en"},
+        {"name": "US Fiscal Dominance & Debt Issuance", "url": "https://news.google.com/rss/search?q=%22US+Treasury+auction%22+OR+%22fiscal+deficit%22+OR+%22debt+issuance%22+OR+%22term+premium%22+when:2d&hl=en-US&gl=US&ceid=US:en"},
+        {"name": "Bilateral Settlements & Reserve Assets", "url": "https://news.google.com/rss/search?q=%22bilateral+settlement%22+OR+%22local+currencies%22+OR+%22de-dollarization%22+OR+%22reserve+diversification%22+when:2d&hl=en-US&gl=US&ceid=US:en"},
+        {"name": "China Sovereign Macro & Liquidity", "url": "https://news.google.com/rss/search?q=%22China+macro%22+OR+%22PBOC+liquidity%22+OR+%22China+bonds%22+OR+%22yuan+devaluation%22+when:2d&hl=en-US&gl=US&ceid=US:en"}
     ]
 
     def __init__(self, request_timeout: float = 6.0):
         self.request_timeout = request_timeout
         self.last_fetch: Dict[str, float] = {}
         self.feed_states: Dict[str, Dict[str, Any]] = {}
-        self.cooldown_sec = 25.0
+        self.cooldown_sec = 10.0
         self.max_age_seconds = 48.0 * 3600.0  # 48-Hour Publication Age Gate
 
     def _parse_pub_ts(self, entry: Dict[str, Any]) -> float:
@@ -84,7 +88,7 @@ class SovereignWiresCollector:
             
             parsed = feedparser.parse(raw_data)
             feed_candidates = []
-            for entry in parsed.entries[:14]:
+            for entry in parsed.entries[:40]:
                 title = entry.get("title", "").strip()
                 summary = entry.get("summary", "").strip()
                 link = entry.get("link", url)

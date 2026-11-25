@@ -68,7 +68,7 @@ class SovereignMeshDaemon:
 
         while self.running:
             try:
-                time.sleep(35.0)
+                time.sleep(12.0)
                 self._ingest_cycle()
             except Exception as e:
                 log(f"Error in ingestion cycle: {e}")
