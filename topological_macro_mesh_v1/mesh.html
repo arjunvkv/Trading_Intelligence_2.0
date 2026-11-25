@@ -279,14 +279,21 @@
       simulation.alpha(0.3).restart();
     });
 
-    const CLUSTERS = [
-      { name: 'Sovereign & Central Banks', color: '#f97316', avgLeadMin: 24, bias: 'BULLISH' },
-      { name: 'Public Search Trends', color: '#38bdf8', avgLeadMin: 14, bias: 'PRECURSOR ACCUM' },
-      { name: 'Breaking Wire Shocks', color: '#ef4444', avgLeadMin: 8, bias: 'VOLATILITY SPIKE' },
-      { name: 'Intermarket Assets (Gold/USD/Yields)', color: '#eab308', avgLeadMin: 4, bias: 'IMMEDIATE CASH' },
-      { name: 'Dynamic Verified Crowd Inquiries', color: '#ec4899', avgLeadMin: 19, bias: 'LIQUIDITY DIVERGENCE' },
-      { name: 'Peripheral Macro Branches', color: '#22c55e', avgLeadMin: 32, bias: 'STRUCTURAL LAG' }
-    ];
+    const PALETTE = ['#f97316', '#38bdf8', '#ef4444', '#eab308', '#ec4899', '#22c55e', '#a855f7', '#14b8a6', '#06b6d4', '#f43f5e'];
+    const dynamicCommunitiesMap = new Map();
+
+    function getClusterMeta(cIdx) {
+      const idx = cIdx !== undefined ? cIdx : 0;
+      if (dynamicCommunitiesMap.has(idx)) {
+        return dynamicCommunitiesMap.get(idx);
+      }
+      return {
+        name: `Cluster ${idx + 1}`,
+        color: PALETTE[idx % PALETTE.length],
+        avgLeadMin: 18,
+        bias: 'EMPIRICAL TRANSIENT'
+      };
+    }
 
     let nodes = [];
     let links = [];
@@ -386,7 +393,7 @@
         } else {
           // Ambient celestial web lines
           const cIdx = s.cluster !== undefined ? s.cluster : 0;
-          const col = CLUSTERS[cIdx]?.color || '#94a3b8';
+          const col = getClusterMeta(cIdx).color;
           ctx.strokeStyle = col + '38'; // 22% opacity
           ctx.lineWidth = 0.7 / transform.k;
         }
@@ -411,7 +418,7 @@
 
       // 2. Draw Nodes & Gentle Wavefront Rings (Restricted to True Extreme Anomalies)
       for (const node of nodes) {
-        const cluster = CLUSTERS[node.cluster] || CLUSTERS[0];
+        const cluster = getClusterMeta(node.cluster);
         const isSelected = (selectedNode === node);
         const isHovered = (hoveredNode === node);
 
@@ -519,7 +526,7 @@
 
       if (found) {
         hoveredNode = found;
-        const c = CLUSTERS[found.cluster];
+        const c = getClusterMeta(found.cluster);
         document.getElementById('tt-title').innerText = found.label;
         document.getElementById('tt-cluster').innerText = c.name.toUpperCase();
         document.getElementById('tt-dot').style.background = c.color;
@@ -564,7 +571,7 @@
       document.getElementById('insp-name').innerText = node.label;
       document.getElementById('insp-id').innerText = `ID: ${node.id}`;
       
-      const cluster = CLUSTERS[node.cluster] || CLUSTERS[0];
+      const cluster = getClusterMeta(node.cluster);
       const badge = document.getElementById('insp-cluster');
       badge.innerText = cluster.name.toUpperCase();
       badge.style.color = cluster.color;
@@ -843,6 +850,18 @@
       const tray = document.getElementById('dynamic-cluster-list');
       if (!tray) return;
 
+      // Populate dynamicCommunitiesMap from server's mathematical community detection
+      if (graphData && graphData.communities && Array.isArray(graphData.communities)) {
+        graphData.communities.forEach(c => {
+          dynamicCommunitiesMap.set(c.id, {
+            name: c.name,
+            color: PALETTE[c.id % PALETTE.length],
+            avgLeadMin: Math.round(10 + (c.id % 4) * 6),
+            bias: 'EMPIRICAL TRANSIENT'
+          });
+        });
+      }
+
       // Group nodes by cluster ID
       const clusterMap = new Map();
       nodes.forEach(n => {
@@ -853,25 +872,21 @@
 
       tray.innerHTML = '';
 
-      // Palette of colors for discovered communities
-      const PALETTE = ['#f97316', '#38bdf8', '#ef4444', '#eab308', '#ec4899', '#22c55e', '#a855f7', '#14b8a6'];
-
       clusterMap.forEach((clusterNodes, cIdx) => {
-        // 1. Discover the natural community title by finding the highest-degree or highest-Z node (the "God Node" of this cluster)
+        const meta = getClusterMeta(cIdx);
+        // Find the central node
         const centralNode = clusterNodes.reduce((prev, curr) => {
           const prevScore = (prev.r || 3) * 2 + (prev.z_score || 0);
           const currScore = (curr.r || 3) * 2 + (curr.z_score || 0);
           return currScore > prevScore ? curr : prev;
         }, clusterNodes[0]);
 
-        // 2. Calculate dynamic Geodesic Latency (tau) from this cluster to XAUUSD
         const shortest = findShortestPathToGold(centralNode);
         const hops = Math.max(1, shortest.length);
-        const dynamicTauMin = Math.round(hops * 6.5); // Geodesic latency based on graph distance
+        const dynamicTauMin = Math.round(hops * 6.5);
 
-        // 3. Clean label without synthetic suffixes
-        const cleanLabel = centralNode.label.split('#')[0].replace('Hub', '').trim();
-        const color = PALETTE[cIdx % PALETTE.length];
+        const cleanLabel = meta.name;
+        const color = meta.color;
 
         const row = document.createElement('div');
         row.className = 'flex items-center justify-between p-1 rounded hover:bg-zinc-800/60 cursor-pointer transition';

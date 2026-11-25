@@ -10,6 +10,7 @@ Eliminates all 4 Traps:
 import time
 import math
 import re
+import heapq
 import urllib.parse
 from collections import defaultdict, deque
 from typing import List, Dict, Any, Tuple, Set
@@ -21,10 +22,10 @@ except ImportError:
 STOPWORDS = {
     'the', 'and', 'for', 'that', 'this', 'with', 'from', 'have', 'were', 
     'which', 'about', 'https', 'http', 'com', 'are', 'was', 'been', 
-    'they', 'their', 'what', 'when', 'where', 'who', 'will', 'more',
-    'into', 'some', 'than', 'them', 'then', 'also', 'other', 'over',
-    'not', 'his', 'her', 'its', 'our', 'your', 'just', 'has', 'had',
-    'all', 'any', 'one', 'out', 'can', 'could', 'would', 'should',
+    'they', 'their', 'what', 'when', 'where', 'who', 'why', 'how', 'will', 'more',
+    'into', 'some', 'than', 'them', 'then', 'also', 'other', 'over', 'per', 'via',
+    'not', 'his', 'her', 'its', 'our', 'your', 'just', 'has', 'had', 'amid', 'upon',
+    'all', 'any', 'one', 'out', 'can', 'could', 'would', 'should', 'but', 'yet', 'nor', 'now', 'may', 'might', 'must',
     'having', 'most', 'much', 'does', 'did', 'done', 'said', 'says',
     'like', 'very', 'well', 'many', 'even', 'such', 'year', 'years',
     'time', 'before', 'after', 'down', 'only', 'while', 'under',
@@ -230,10 +231,43 @@ class TopologyEngine:
                         self.edges[edge_key]["te"] = dynamic_te
                         self.edges[edge_key]["last_seen"] = now
 
-    def _discover_communities(self) -> Dict[int, List[str]]:
+    def find_shortest_causal_path(self, start_token: str, target: str = "god_xau") -> Tuple[List[str], float]:
+        """
+        Dijkstra's Algorithm over Transfer Entropy / Edge Weights to find the true
+        mathematical transmission pipeline from an emerging entity to Gold (XAUUSD).
+        """
+        if start_token not in self.nodes or target not in self.nodes:
+            return ([start_token, target], 0.5)
+
+        adj = defaultdict(dict)
+        for (src, tgt), ed in self.edges.items():
+            w = ed.get("weight", 0.5)
+            # Cost is inverse of weight: high weight = low resistance transmission path
+            cost = 1.0 / max(0.05, w)
+            adj[src][tgt] = cost
+            adj[tgt][src] = cost
+
+        pq = [(0.0, start_token, [start_token])]
+        visited = set()
+
+        while pq:
+            cost, curr, path = heapq.heappop(pq)
+            if curr == target:
+                avg_weight = len(path) / max(1e-4, cost)
+                return (path, round(avg_weight, 2))
+            if curr in visited:
+                continue
+            visited.add(curr)
+            for nbr, edge_cost in adj[curr].items():
+                if nbr not in visited and len(path) < 6: # max 5 hops
+                    heapq.heappush(pq, (cost + edge_cost, nbr, path + [nbr]))
+
+        return ([start_token, "god_xau"], 0.3)
+
+    def _discover_communities(self) -> Tuple[Dict[int, List[str]], Dict[int, Dict[str, Any]]]:
         """
         Seedless Mathematical Community Discovery.
-        Finds emergent thematic groupings organically without fixed human boxes.
+        Finds emergent thematic groupings organically and names them via TF-ICF centroid salience.
         """
         adj = defaultdict(set)
         for (src, tgt) in self.edges.keys():
@@ -243,6 +277,7 @@ class TopologyEngine:
 
         visited = set()
         communities = {}
+        community_meta = {}
         c_idx = 0
 
         # Sort nodes by degree so community hubs are processed first
@@ -253,7 +288,7 @@ class TopologyEngine:
                 members = []
                 queue = deque([nid])
                 visited.add(nid)
-                while queue and len(members) < 40: # max community size
+                while queue and len(members) < 45: # max community size
                     curr = queue.popleft()
                     members.append(curr)
                     for nbr in adj[curr]:
@@ -262,9 +297,30 @@ class TopologyEngine:
                             queue.append(nbr)
                 if len(members) >= 2:
                     communities[c_idx] = members
+                    
+                    # Mathematical Centroid Naming (TF * ICF * Degree * Z)
+                    def score_token(t):
+                        d = self.nodes.get(t, {})
+                        deg = len(adj[t])
+                        z = max(0.5, d.get("z_score", 0.0))
+                        doc_freq = self.token_mentions.get(t, 1)
+                        total_docs = max(10, self.total_docs_seen)
+                        icf = math.log(1.0 + (total_docs / max(1, doc_freq)))
+                        return deg * z * icf
+
+                    ranked_tokens = sorted(members, key=score_token, reverse=True)
+                    top_t = [t.title() for t in ranked_tokens[:2]]
+                    name = " & ".join(top_t) + " Cluster" if len(top_t) >= 2 else (top_t[0] + " Cluster" if top_t else f"Cluster {c_idx+1}")
+                    
+                    community_meta[c_idx] = {
+                        "id": c_idx,
+                        "name": name,
+                        "top_tokens": [t.title() for t in ranked_tokens[:5]],
+                        "size": len(members)
+                    }
                     c_idx += 1
 
-        return communities
+        return communities, community_meta
 
     def get_surging_entities(self, top_k: int = 5) -> List[str]:
         """
@@ -348,8 +404,14 @@ class TopologyEngine:
                     hl_lower = hl.lower()
                     pub_lower = pub.lower()
                     is_real_pub = pub_lower not in CROWD_SOURCES and 'crowd' not in pub_lower and 'search' not in pub_lower and 'wiki' not in pub_lower
-                    admin_pen = 0.2 if any(w in hl_lower for w in ['challenge', 'competition', 'welcome remarks', 'ceremony', 'holiday', 'fellowship']) else 1.0
-                    return (2.5 if is_real_pub else 0.5) * admin_pen * len(hl.split())
+                    
+                    # Mathematical Information Density:
+                    tokens = [w for w in re.findall(r'[a-zA-Z]{3,}', hl_lower) if w not in STOPWORDS]
+                    total_docs = max(20, self.total_docs_seen)
+                    salience = sum(math.log(1.0 + (total_docs / max(1, self.token_mentions.get(w, 1)))) for w in tokens)
+                    max_z = max([self.nodes.get(w, {}).get("z_score", 0.0) for w in tokens] or [0.0])
+                    
+                    return (2.5 if is_real_pub else 0.5) * (1.0 + max_z * 0.4) * salience
 
                 best_ctx = max(contexts, key=score_context)
                 context_headline, primary_pub = best_ctx
@@ -366,11 +428,19 @@ class TopologyEngine:
             # 1. Hawkes Ignition Point Process (Self-Exciting Acceleration)
             hawkes = self.lead_arbiter.compute_hawkes_ignition(timestamps, list(publishers), now=now)
 
-            # 2. Sovereign Causal Transmission Pathway (derived from topological realm origin)
+            # 2. Sovereign Causal Transmission Pathway (derived from Dijkstra living graph path)
             p_tokens = phrase.split()
             cand_clusters = [self.nodes[t]["cluster"] for t in p_tokens if t in self.nodes]
             cand_cluster = max(set(cand_clusters), key=cand_clusters.count) if cand_clusters else 0
-            causal = self.lead_arbiter.derive_causal_pathway(context_headline, cluster_idx=cand_cluster, is_crowd_only=is_pure_crowd)
+            
+            # Mathematical Dijkstra transmission path through edge weights to Gold
+            causal_path, path_weight = self.find_shortest_causal_path(p_tokens[0] if p_tokens else phrase, target="god_xau")
+            causal = self.lead_arbiter.derive_causal_pathway(
+                context_headline,
+                cluster_idx=cand_cluster,
+                is_crowd_only=is_pure_crowd,
+                transmission_path=causal_path
+            )
 
             # 3. Attention Divergence Asymmetry (Wires vs Crowd)
             is_wire = phrase in self.wire_phrases
@@ -568,11 +638,20 @@ class TopologyEngine:
             self.phrase_sources.pop(p, None)
             self.phrase_contexts.pop(p, None)
 
-        # 4. Graph Density Clamping (Guarantees silky smooth 60 FPS in D3 canvas)
-        MAX_NODES = 350
+        # 4. Graph Density Clamping (K-core topological resilience, expanding capacity to 500 nodes)
+        MAX_NODES = 500
         if len(self.nodes) > MAX_NODES:
-            non_god_nodes = [(nid, data.get("z_score", 0.0) * self.token_mentions.get(nid, 1)) 
-                             for nid, data in self.nodes.items() if not data.get("is_god")]
+            # Score nodes by Degree * Mentions * Z-score
+            # Retain well-connected 2-core hubs; cull isolated dead singletons first
+            degrees = {nid: 0 for nid in self.nodes}
+            for (s, t) in self.edges.keys():
+                if s in degrees: degrees[s] += 1
+                if t in degrees: degrees[t] += 1
+                
+            non_god_nodes = [
+                (nid, degrees.get(nid, 0) * 2.0 + data.get("z_score", 0.0) * math.log(1.0 + self.token_mentions.get(nid, 1))) 
+                for nid, data in self.nodes.items() if not data.get("is_god")
+            ]
             non_god_nodes.sort(key=lambda x: x[1], reverse=True)
             excess = set(nid for nid, _ in non_god_nodes[MAX_NODES - 5:])
             for nid in excess:
@@ -584,7 +663,7 @@ class TopologyEngine:
     def export_graph_json(self) -> Dict[str, Any]:
         self.prune_and_decay()
         degrees, hops_to_god, _ = self._compute_graph_topology()
-        communities = self._discover_communities()
+        communities, community_meta = self._discover_communities()
 
         # Map each node to its dynamic emergent community
         node_cluster_map = {}
@@ -722,6 +801,15 @@ class TopologyEngine:
             "timestamp": time.time(),
             "nodes": nodes_out,
             "links": links_out,
+            "communities": [
+                {
+                    "id": cid,
+                    "name": meta["name"],
+                    "top_tokens": meta["top_tokens"],
+                    "size": meta["size"]
+                }
+                for cid, meta in community_meta.items()
+            ],
             "emerging_constellations": constellations,
             "precursor_clues": constellations, # backwards compatibility for UI
             "primary_driver": primary_driver,

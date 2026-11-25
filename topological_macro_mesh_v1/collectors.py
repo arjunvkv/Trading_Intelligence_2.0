@@ -230,7 +230,7 @@ class DataCollector:
         wires.extend(self.fetch_round_robin_country_wires(max_items_per_country=8))
         return wires
 
-    def fetch_geopolitical_precursor_wires(self) -> List[Dict[str, str]]:
+    def fetch_geopolitical_precursor_wires(self, dynamic_query: str = None) -> List[Dict[str, str]]:
         """High-velocity breaking geopolitical and crisis feeds for war, strikes, and chokepoint shocks."""
         wires = []
         # Al Jazeera English - supreme for Middle East, Red Sea, Persian Gulf, Suez
@@ -241,13 +241,20 @@ class DataCollector:
         wires.extend(self.fetch_rss_items("https://www.france24.com/en/rss", "France 24 International", max_items=8))
         # Google News World Geopolitics (US/Global Edition, cached 120s TTL)
         wires.extend(self.fetch_rss_items("https://news.google.com/rss/headlines/section/topic/WORLD?hl=en-US&gl=US&ceid=US:en", "Global Geopolitics", max_items=8, ttl_seconds=120.0))
-        # Google News Real-time 1-hour Breaking Conflict & Macro Shock Search (cached 120s TTL)
-        wires.extend(self.fetch_rss_items(
-            "https://news.google.com/rss/search?q=when:1h+(gold+OR+dollar+OR+yields+OR+treasury+OR+strike+OR+iran+OR+ukraine+OR+tariffs+OR+fed+OR+inflation+OR+debt+OR+crude+OR+opec)&hl=en-US&gl=US&ceid=US:en",
-            "Realtime Conflict & Macro Wires",
-            max_items=16,
-            ttl_seconds=120.0
-        ))
+        
+        # Adaptive Real-Time Breaking Shock Radar (Driven dynamically by top surging topology tokens)
+        if dynamic_query:
+            clean_q = urllib.parse.quote(dynamic_query)
+            search_url = f"https://news.google.com/rss/search?q=when:1h+({clean_q})&hl=en-US&gl=US&ceid=US:en"
+            wires.extend(self.fetch_rss_items(search_url, "Realtime Shock Radar", max_items=16, ttl_seconds=90.0))
+        else:
+            # Cold-start fallback: broad breaking international headlines
+            wires.extend(self.fetch_rss_items(
+                "https://news.google.com/rss/search?q=when:1h+(breaking+OR+crisis+OR+sanctions+OR+central+bank)&hl=en-US&gl=US&ceid=US:en",
+                "Realtime Shock Radar",
+                max_items=12,
+                ttl_seconds=120.0
+            ))
         return wires
 
     def fetch_intermarket_wires(self) -> List[Dict[str, str]]:
@@ -307,7 +314,7 @@ class DataCollector:
         return posts
 
 
-    def fetch_federated_mastodon_squawks(self) -> List[Dict[str, str]]:
+    def fetch_federated_mastodon_squawks(self, dynamic_seeds: List[str] = None) -> List[Dict[str, str]]:
         """Multi-instance federated open squawks across academic economics, energy, and geopolitics."""
         posts = []
         feeds = [
@@ -317,6 +324,10 @@ class DataCollector:
             ("https://mastodon.social/api/v1/timelines/tag/energy?limit=6", "Mastodon Energy Desk"),
             ("https://mastodon.social/api/v1/timelines/tag/inflation?limit=6", "Mastodon Debasement Desk")
         ]
+        if dynamic_seeds:
+            top_seed = dynamic_seeds[0].strip().lower()
+            if len(top_seed) >= 3 and top_seed.isalpha():
+                feeds.append((f"https://mastodon.social/api/v1/timelines/tag/{urllib.parse.quote(top_seed)}?limit=6", f"Mastodon {top_seed.title()} Stream"))
 
         for url, source_name in feeds:
             raw = self._fetch_safe(url, source_name, timeout=5)
@@ -381,7 +392,7 @@ class DataCollector:
         """Aggregates all crowd sources: Wikipedia Attention, Federated Mastodon, and Search Trajectories."""
         posts = []
         posts.extend(self.fetch_wikipedia_crowd_pageviews(dynamic_topics=dynamic_seeds))
-        posts.extend(self.fetch_federated_mastodon_squawks())
+        posts.extend(self.fetch_federated_mastodon_squawks(dynamic_seeds=dynamic_seeds))
         posts.extend(self.fetch_public_search_trajectories(dynamic_seeds=dynamic_seeds))
         return posts
 
@@ -425,10 +436,10 @@ class DataCollector:
             "states": list(self.source_states.values())
         }
 
-    def fetch_all(self, dynamic_seeds: List[str] = None) -> Dict[str, Any]:
+    def fetch_all(self, dynamic_seeds: List[str] = None, dynamic_search_query: str = None) -> Dict[str, Any]:
         """Aggregate all streams safely with full error and rate-limit tracking."""
         sovereign = self.fetch_sovereign_wires()
-        geopolitical = self.fetch_geopolitical_precursor_wires()
+        geopolitical = self.fetch_geopolitical_precursor_wires(dynamic_query=dynamic_search_query)
         market = self.fetch_intermarket_wires()
 
         # If dynamic_seeds not supplied by topology graph, derive dynamically from freshly fetched wire headlines!

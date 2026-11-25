@@ -148,9 +148,10 @@ class LeadArbiter:
             "badge": badge
         }
 
-    def derive_causal_pathway(self, text: str, cluster_idx: int = 0, is_crowd_only: bool = False) -> Dict[str, Any]:
+    def derive_causal_pathway(self, text: str, cluster_idx: int = 0, is_crowd_only: bool = False, transmission_path: List[str] = None) -> Dict[str, Any]:
         """
         Traces the genuine sovereign macro transmission pipeline to Gold (XAUUSD).
+        Pure graph physics: Uses the living topological geodesic path across graph nodes.
         Zero fake theater: Crowd queries are never tagged as physical kinetic strikes.
         """
         text_lower = text.lower()
@@ -160,15 +161,26 @@ class LeadArbiter:
             return {
                 "pipeline": "CROWD_RESEARCH_PULSE",
                 "pipeline_name": "Crowd Research Pulse (Lagging Public Query)",
-                "transmission_chain": "Public Query Curiosity ➔ Retail Sentiment Drift (No Institutional Wire Confirmation)",
+                "transmission_chain": "Public Query Curiosity ➔ Retail Sentiment Drift (Unconfirmed on Institutional Wires)",
                 "expected_gold_impact": "NEUTRAL_CROWD_PULSE",
                 "inflection_window_min": 0,
                 "inflection_window_max": 0,
                 "inflection_summary": "Retail crowd curiosity; unconfirmed on sovereign institutional wires"
             }
 
-        # 2. Genuine institutional transmission pathways derived from topological realm origin
-        if cluster_idx == 0:
+        # 2. Dynamic graph-derived geodesic transmission chain (Dijkstra optimal path to Gold)
+        if transmission_path and len(transmission_path) >= 2:
+            clean_labels = []
+            for t in transmission_path:
+                lbl = "XAUUSD SPOT" if t == "god_xau" else t.replace("_", " ").title()
+                clean_labels.append(lbl)
+            transmission = " ➔ ".join(clean_labels)
+            lead_entity = clean_labels[0]
+            pipe_name = f"{lead_entity} Geodesic Transmission"
+            pipeline = f"{transmission_path[0].upper()}_VECTOR"
+            inflection_minutes = (max(5, len(transmission_path) * 4), len(transmission_path) * 8 + 10)
+            gold_bias = "VOLATILITY_EXPANSION" if len(transmission_path) <= 3 else "STRUCTURAL_DIFFUSION"
+        elif cluster_idx == 0:
             pipeline = "SOVEREIGN_MONETARY_VECTOR"
             pipe_name = "Sovereign Fiscal & Liquidity Realm"
             transmission = "Fiscal Dominance & Central Bank Reserves ➔ Sovereign Bullion Floor"
@@ -200,7 +212,7 @@ class LeadArbiter:
             "expected_gold_impact": gold_bias,
             "inflection_window_min": inflection_minutes[0],
             "inflection_window_max": inflection_minutes[1],
-            "inflection_summary": f"Expected tape response within {inflection_minutes[0]}-{inflection_minutes[1]} mins"
+            "inflection_summary": f"Expected tape response within {inflection_minutes[0]}-{inflection_minutes[1]} mins ({len(transmission_path or [])} hops)"
         }
 
     def calculate_attention_divergence(self, wire_z_scores: List[float], crowd_z_scores: List[float]) -> Dict[str, Any]:
