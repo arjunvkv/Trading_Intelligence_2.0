@@ -42,7 +42,7 @@ class DataCollector:
         self.domain_last_request: Dict[str, float] = {}
         # Domain-specific delays (strict on Google News, fast on open high-throughput CDNs)
         self.domain_delays: Dict[str, float] = {
-            'news.google.com': 2.5,
+            'news.google.com': 3.5,
             'suggestqueries.google.com': 0.1,
             'wikimedia.org': 0.1,
             'finance.yahoo.com': 0.3,
@@ -50,6 +50,9 @@ class DataCollector:
             'econtwitter.net': 0.3
         }
         self.default_domain_delay = 0.5
+        
+        # In-memory RSS feed cache: url -> (cached_at_ts, items_list)
+        self.feed_cache: Dict[str, Tuple[float, List[Dict[str, str]]]] = {}
 
     def _get_domain(self, url: str) -> str:
         try:
@@ -135,10 +138,22 @@ class DataCollector:
                 return b""
         return b""
 
-    def fetch_rss_items(self, feed_url: str, source_name: str, max_items: int = 8) -> List[Dict[str, str]]:
+    def fetch_rss_items(self, feed_url: str, source_name: str, max_items: int = 8, ttl_seconds: float = 90.0) -> List[Dict[str, str]]:
+        now = time.time()
+        
+        # 1. Check TTL cache to protect against rapid poll rate-limits (especially news.google.com)
+        if feed_url in self.feed_cache:
+            cached_ts, cached_items = self.feed_cache[feed_url]
+            if (now - cached_ts) < ttl_seconds and cached_items:
+                return cached_items
+
         raw = self._fetch_safe(feed_url, source_name)
         if not raw:
+            # Graceful fallback: return previously cached items rather than starving the pipeline
+            if feed_url in self.feed_cache:
+                return self.feed_cache[feed_url][1]
             return []
+
         items = []
         try:
             root = ET.fromstring(raw)
@@ -161,9 +176,13 @@ class DataCollector:
                             "text": clean_title,
                             "url": url_str
                         })
+            if items:
+                self.feed_cache[feed_url] = (now, items)
             if source_name in self.source_states:
                 self.source_states[source_name]["items_count"] = len(items)
         except Exception as e:
+            if feed_url in self.feed_cache:
+                return self.feed_cache[feed_url][1]
             if source_name in self.source_states:
                 self.source_states[source_name]["status"] = "PARSE_ERROR"
                 self.source_states[source_name]["error_msg"] = f"XML Parse Error: {str(e)[:40]}"
@@ -183,13 +202,16 @@ class DataCollector:
         wires.extend(self.fetch_rss_items("https://www.aljazeera.com/xml/rss/all.xml", "Al Jazeera Wires", max_items=8))
         # BBC World News - rapid global breaking
         wires.extend(self.fetch_rss_items("http://feeds.bbci.co.uk/news/world/rss.xml", "BBC World Breaking", max_items=8))
-        # Google News World Geopolitics
-        wires.extend(self.fetch_rss_items("https://news.google.com/rss/headlines/section/topic/WORLD", "Global Geopolitics", max_items=8))
-        # Google News Real-time 1-hour Breaking Conflict & Macro Shock Search (Unified)
+        # France 24 International - tier-1 open world wire
+        wires.extend(self.fetch_rss_items("https://www.france24.com/en/rss", "France 24 International", max_items=8))
+        # Google News World Geopolitics (cached 120s TTL to prevent 429)
+        wires.extend(self.fetch_rss_items("https://news.google.com/rss/headlines/section/topic/WORLD", "Global Geopolitics", max_items=8, ttl_seconds=120.0))
+        # Google News Real-time 1-hour Breaking Conflict & Macro Shock Search (cached 120s TTL)
         wires.extend(self.fetch_rss_items(
             "https://news.google.com/rss/search?q=when:1h+(gold+OR+dollar+OR+yields+OR+treasury+OR+strike+OR+iran+OR+ukraine+OR+tariffs+OR+fed+OR+inflation+OR+debt+OR+crude+OR+opec)&hl=en-US&gl=US&ceid=US:en",
             "Realtime Conflict & Macro Wires",
-            max_items=16
+            max_items=16,
+            ttl_seconds=120.0
         ))
         return wires
 
@@ -207,8 +229,8 @@ class DataCollector:
         
         # MarketWatch Top Stories (Official Dow Jones Feed)
         items.extend(self.fetch_rss_items("https://feeds.content.dowjones.io/public/rss/mw_topstories", "MarketWatch Wire", max_items=6))
-        # Google Business Macro
-        items.extend(self.fetch_rss_items("https://news.google.com/rss/headlines/section/topic/BUSINESS", "Global Business Wire", max_items=8))
+        # Google Business Macro (cached 120s TTL to prevent 429)
+        items.extend(self.fetch_rss_items("https://news.google.com/rss/headlines/section/topic/BUSINESS", "Global Business Wire", max_items=8, ttl_seconds=120.0))
         return items
 
     def fetch_wikipedia_crowd_pageviews(self, dynamic_topics: List[str] = None) -> List[Dict[str, str]]:
