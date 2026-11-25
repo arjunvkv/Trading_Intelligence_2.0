@@ -66,6 +66,11 @@ class TopologicalManifold:
         publisher = doc.get("publisher", "Sovereign Wire")
         now = doc.get("timestamp", time.time())
 
+        # Strict Publication Age Filter (Drop any document older than 48 hours)
+        doc_age = doc.get("age_sec")
+        if doc_age is not None and doc_age > 48.0 * 3600.0:
+            return []
+
         # Extract genuine macro entities (with sub-token suppression)
         entities = self.extractor.extract_entities(text)
         if not entities:

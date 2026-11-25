@@ -18,22 +18,22 @@ class SovereignWiresCollector:
         {"name": "European Central Bank", "url": "https://www.ecb.europa.eu/rss/press.html"},
         {"name": "Bank of England News", "url": "https://www.bankofengland.co.uk/rss/news"},
         {"name": "Bank of Japan Releases", "url": "https://www.boj.or.jp/en/rss/whatsnew.xml"},
-        {"name": "Bank for International Settlements BIS", "url": "https://news.google.com/rss/search?q=%22Bank+for+International+Settlements%22+OR+%22BIS+bulletin%22+OR+%22Basel+Committee%22&hl=en-US&gl=US&ceid=US:en"},
-        {"name": "International Monetary Fund IMF", "url": "https://news.google.com/rss/search?q=%22International+Monetary+Fund%22+OR+%22IMF+bailout%22+OR+%22SDR+reserves%22&hl=en-US&gl=US&ceid=US:en"},
-        {"name": "People's Bank of China / Macro Wires", "url": "https://news.google.com/rss/search?q=PBOC+OR+%22People%27s+Bank+of+China%22+OR+%22State+Administration+of+Foreign+Exchange%22&hl=en-US&gl=US&ceid=US:en"},
-        {"name": "Reserve Bank of India Sovereign", "url": "https://news.google.com/rss/search?q=%22Reserve+Bank+of+India%22+OR+%22RBI+monetary+policy%22+OR+%22forex+reserves%22&hl=en-US&gl=US&ceid=US:en"},
-        {"name": "Swiss National Bank SNB", "url": "https://news.google.com/rss/search?q=%22Swiss+National+Bank%22+OR+%22SNB+policy+rate%22&hl=en-US&gl=US&ceid=US:en"},
+        {"name": "Bank for International Settlements BIS", "url": "https://news.google.com/rss/search?q=%22Bank+for+International+Settlements%22+OR+%22BIS+bulletin%22+OR+%22Basel+Committee%22+when:2d&hl=en-US&gl=US&ceid=US:en"},
+        {"name": "International Monetary Fund IMF", "url": "https://news.google.com/rss/search?q=%22International+Monetary+Fund%22+OR+%22IMF+bailout%22+OR+%22SDR+reserves%22+when:2d&hl=en-US&gl=US&ceid=US:en"},
+        {"name": "People's Bank of China / Macro Wires", "url": "https://news.google.com/rss/search?q=PBOC+OR+%22People%27s+Bank+of+China%22+OR+%22State+Administration+of+Foreign+Exchange%22+when:2d&hl=en-US&gl=US&ceid=US:en"},
+        {"name": "Reserve Bank of India Sovereign", "url": "https://news.google.com/rss/search?q=%22Reserve+Bank+of+India%22+OR+%22RBI+monetary+policy%22+OR+%22forex+reserves%22+when:2d&hl=en-US&gl=US&ceid=US:en"},
+        {"name": "Swiss National Bank SNB", "url": "https://news.google.com/rss/search?q=%22Swiss+National+Bank%22+OR+%22SNB+policy+rate%22+when:2d&hl=en-US&gl=US&ceid=US:en"},
         {"name": "Bank of Canada", "url": "https://www.bankofcanada.ca/valet/rss/press-releases"},
         {"name": "Reserve Bank of Australia", "url": "https://www.rba.gov.au/rss/rss-cb-bulletin.xml"},
-        {"name": "Deutsche Bundesbank / Eurozone", "url": "https://news.google.com/rss/search?q=%22Bundesbank%22+OR+%22German+Bunds%22+OR+%22BTP+spread%22&hl=en-US&gl=US&ceid=US:en"},
-        {"name": "Monetary Authority of Singapore MAS", "url": "https://news.google.com/rss/search?q=%22Monetary+Authority+of+Singapore%22+OR+%22MAS+monetary+policy%22&hl=en-US&gl=US&ceid=US:en"},
-        {"name": "US Treasury Debt & Auctions", "url": "https://news.google.com/rss/search?q=%22US+Treasury%22+OR+%22Treasury+auction%22+OR+%22bid-to-cover%22+OR+%22Treasury+yields%22+OR+%22debt+ceiling%22&hl=en-US&gl=US&ceid=US:en"},
-        {"name": "Global Sovereign FX Reserves & Swaps", "url": "https://news.google.com/rss/search?q=%22foreign+exchange+reserves%22+OR+%22bilateral+swap+line%22+OR+%22sovereign+debt+default%22+OR+%22de-dollarization%22&hl=en-US&gl=US&ceid=US:en"},
-        {"name": "Central Bank Liquidity Facilities", "url": "https://news.google.com/rss/search?q=%22reverse+repo%22+OR+%22discount+window%22+OR+%22liquidity+facility%22+OR+%22emergency+lending%22&hl=en-US&gl=US&ceid=US:en"},
-        {"name": "BRICS & De-Dollarization Architecture", "url": "https://news.google.com/rss/search?q=%22BRICS+Pay%22+OR+%22cross-border+settlement%22+OR+%22alternative+currency%22+OR+%22mBridge%22&hl=en-US&gl=US&ceid=US:en"},
+        {"name": "Deutsche Bundesbank / Eurozone", "url": "https://news.google.com/rss/search?q=%22Bundesbank%22+OR+%22German+Bunds%22+OR+%22BTP+spread%22+when:2d&hl=en-US&gl=US&ceid=US:en"},
+        {"name": "Monetary Authority of Singapore MAS", "url": "https://news.google.com/rss/search?q=%22Monetary+Authority+of+Singapore%22+OR+%22MAS+monetary+policy%22+when:2d&hl=en-US&gl=US&ceid=US:en"},
+        {"name": "US Treasury Debt & Auctions", "url": "https://news.google.com/rss/search?q=%22US+Treasury%22+OR+%22Treasury+auction%22+OR+%22bid-to-cover%22+OR+%22Treasury+yields%22+OR+%22debt+ceiling%22+when:2d&hl=en-US&gl=US&ceid=US:en"},
+        {"name": "Global Sovereign FX Reserves & Swaps", "url": "https://news.google.com/rss/search?q=%22foreign+exchange+reserves%22+OR+%22bilateral+swap+line%22+OR+%22sovereign+debt+default%22+OR+%22de-dollarization%22+when:2d&hl=en-US&gl=US&ceid=US:en"},
+        {"name": "Central Bank Liquidity Facilities", "url": "https://news.google.com/rss/search?q=%22reverse+repo%22+OR+%22discount+window%22+OR+%22liquidity+facility%22+OR+%22emergency+lending%22+when:2d&hl=en-US&gl=US&ceid=US:en"},
+        {"name": "BRICS & De-Dollarization Architecture", "url": "https://news.google.com/rss/search?q=%22BRICS+Pay%22+OR+%22cross-border+settlement%22+OR+%22alternative+currency%22+OR+%22mBridge%22+when:2d&hl=en-US&gl=US&ceid=US:en"},
         {"name": "Emirates News Agency WAM Sovereign", "url": "https://news.google.com/rss/search?q=%22Emirates+News+Agency%22+OR+site:wam.ae+OR+%22UAE+central+bank%22+when:2d&hl=en-US&gl=US&ceid=US:en"},
         {"name": "Saudi Press Agency SPA Energy Desk", "url": "https://news.google.com/rss/search?q=%22Saudi+Press+Agency%22+OR+site:spa.gov.sa+OR+%22Saudi+Aramco%22+when:2d&hl=en-US&gl=US&ceid=US:en"},
-        {"name": "OECD Sovereign Debt & Borrowing", "url": "https://news.google.com/rss/search?q=%22OECD%22+OR+%22sovereign+borrowing%22+OR+%22global+debt+outlook%22+when:3d&hl=en-US&gl=US&ceid=US:en"}
+        {"name": "OECD Sovereign Debt & Borrowing", "url": "https://news.google.com/rss/search?q=%22OECD%22+OR+%22sovereign+borrowing%22+OR+%22global+debt+outlook%22+when:2d&hl=en-US&gl=US&ceid=US:en"}
     ]
 
     def __init__(self, request_timeout: float = 6.0):
@@ -41,9 +41,29 @@ class SovereignWiresCollector:
         self.last_fetch: Dict[str, float] = {}
         self.feed_states: Dict[str, Dict[str, Any]] = {}
         self.cooldown_sec = 25.0
+        self.max_age_seconds = 48.0 * 3600.0  # 48-Hour Publication Age Gate
+
+    def _parse_pub_ts(self, entry: Dict[str, Any]) -> float:
+        """Extracts unix timestamp from entry published_parsed or published string."""
+        now = time.time()
+        if entry.get("published_parsed"):
+            try:
+                return float(time.mktime(entry.published_parsed))
+            except Exception:
+                pass
+        pub_raw = entry.get("published", "")
+        if pub_raw:
+            import email.utils
+            try:
+                dt = email.utils.parsedate_to_datetime(pub_raw)
+                if dt:
+                    return dt.timestamp()
+            except Exception:
+                pass
+        return now
 
     def fetch_wires(self) -> List[Dict[str, Any]]:
-        """Collects latest articles across sovereign financial feeds."""
+        """Collects latest articles across sovereign financial feeds strictly within the 48-hour gate."""
         articles = []
         now = time.time()
 
@@ -68,22 +88,37 @@ class SovereignWiresCollector:
                     raw_data = resp.read()
                 
                 parsed = feedparser.parse(raw_data)
+                feed_candidates = []
                 for entry in parsed.entries[:14]:
                     title = entry.get("title", "").strip()
                     summary = entry.get("summary", "").strip()
                     link = entry.get("link", url)
                     published = entry.get("published", "")
+                    pub_ts = self._parse_pub_ts(entry)
+                    age_sec = max(0.0, now - pub_ts)
 
                     if title and len(title) > 10:
-                        articles.append({
+                        feed_candidates.append({
                             "title": title,
                             "summary": summary,
                             "publisher": name,
                             "source_type": "SOVEREIGN_CENTRAL_BANK",
                             "link": link,
                             "published": published,
-                            "timestamp": now
+                            "timestamp": pub_ts if pub_ts <= now else now,
+                            "age_sec": age_sec
                         })
+
+                # Apply 48-Hour Publication Age Gate
+                fresh_items = [item for item in feed_candidates if item["age_sec"] <= self.max_age_seconds]
+                if fresh_items:
+                    articles.extend(fresh_items)
+                elif feed_candidates:
+                    # If direct feed had no release in 48h, keep only single freshest item if within 96h (4 days)
+                    feed_candidates.sort(key=lambda x: x["age_sec"])
+                    if feed_candidates[0]["age_sec"] <= (96.0 * 3600.0):
+                        articles.append(feed_candidates[0])
+
                 self.last_fetch[name] = now
                 self.feed_states[name]["status"] = "HEALTHY"
                 self.feed_states[name]["last_success"] = now
