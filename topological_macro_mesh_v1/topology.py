@@ -248,8 +248,9 @@ class TopologyEngine:
                         self.edges[key]["weight"] = min(3.0, self.edges[key]["weight"] + 0.3)
                         self.edges[key]["last_seen"] = now
 
-            # 4. Empirical Natural Gold Linkage (Pointwise Mutual Information - PMI)
-            # Forms dynamic mathematical association through genuine Gold tokens and COMEX wire sources
+            # 4. Empirical Natural Gold Linkage (Discounted Normalized PMI - DNPMI)
+            # Solves the classic PMI rare-word bias (Pantel & Lin, Bouma) using statistical discounts
+            # and requiring a 2-newsroom quorum to prevent single-source exploration PR noise.
             is_gold_doc = ("gold" in tokens or "Gold" in source or "god_xau" in tokens)
             if is_gold_doc:
                 if is_new_item:
@@ -258,7 +259,7 @@ class TopologyEngine:
                 total_docs = max(10, self.total_docs_seen)
                 p_gold = max(1, self.gold_docs_seen) / total_docs
 
-                # Form statistical linkage with all high-salience tokens in the document
+                # Form statistical linkage with verified high-salience tokens in the document
                 for tok in tokens[:4]:
                     if tok == "god_xau" or len(tok) < 3:
                         continue
@@ -267,16 +268,32 @@ class TopologyEngine:
                     
                     co_count = self.gold_co_occurrences[tok]
                     tok_mentions = max(1, self.token_mentions.get(tok, 1))
+                    pub_count = len(self.token_publishers.get(tok, []))
+
+                    # Statistical Quorum: Single-mention, single-source tokens cannot form direct sovereign 1-hop edges to Gold
+                    if co_count < 2 or pub_count < 2:
+                        continue
                     
                     p_tok = tok_mentions / total_docs
-                    p_joint = max(1, co_count) / total_docs
+                    p_joint = co_count / total_docs
                     
-                    # Pointwise Mutual Information: PMI(tok, gold) = ln( P(tok, gold) / (P(tok) * P(gold)) )
-                    raw_pmi = math.log(max(1e-5, p_joint / (p_tok * p_gold)))
-                    npmi = max(0.0, min(1.0, (raw_pmi + 2.0) / 4.0)) # Normalized between 0 and 1
+                    # 1. Pointwise Mutual Information: PMI(x, y) = ln( P(x, y) / (P(x) * P(y)) )
+                    raw_pmi = math.log(max(1e-6, p_joint / (p_tok * p_gold)))
                     
-                    dynamic_weight = round(max(0.6, min(3.0, 0.8 + (npmi * 2.0))), 2)
-                    dynamic_te = round(max(0.30, min(0.92, 0.40 + (npmi * 0.45))), 2)
+                    # 2. Bouma Normalized PMI: NPMI = PMI / (-ln(P(x, y))), mapped strictly to [-1, 1]
+                    self_info = -math.log(max(1e-6, p_joint))
+                    npmi = max(-1.0, min(1.0, raw_pmi / max(1e-4, self_info)))
+                    
+                    # 3. Empirical Evidence Discount (Pantel & Lin): Heavily discounts small sample counts
+                    discount = co_count / (co_count + 1.5)
+                    dnpmi = max(0.0, npmi * discount)
+                    
+                    # Only statistically verified associations form direct 1-hop sovereign transmission edges
+                    if dnpmi < 0.20:
+                        continue
+                    
+                    dynamic_weight = round(max(0.6, min(3.0, 0.7 + (dnpmi * 2.3))), 2)
+                    dynamic_te = round(max(0.30, min(0.95, 0.35 + (dnpmi * 0.60))), 2)
                     
                     edge_key = tuple(sorted([tok, "god_xau"]))
                     if edge_key not in self.edges:
@@ -642,12 +659,11 @@ class TopologyEngine:
         # 1. Decay edge weights
         expired_edges = []
         for key, edge in self.edges.items():
-            if key[0] == "god_xau" or key[1] == "god_xau":
-                continue
             dt = now - edge["last_seen"]
             decay = math.exp(-self.decay_constant * dt)
             edge["weight"] *= decay
-            if dt > self.half_life or edge["weight"] < 0.12:
+            min_thresh = 0.35 if (key[0] == "god_xau" or key[1] == "god_xau") else 0.12
+            if dt > self.half_life or edge["weight"] < min_thresh:
                 expired_edges.append(key)
         for key in expired_edges:
             del self.edges[key]
