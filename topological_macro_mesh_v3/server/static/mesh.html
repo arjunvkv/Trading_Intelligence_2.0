@@ -344,6 +344,22 @@
       return DOMAIN_PALETTE["DEFAULT"];
     }
 
+    function getNodeColor(node) {
+      if (!node) return "#64748b";
+      const cat = (node.category || "").toLowerCase();
+      if (cat && cat !== "default" && cat !== "named_entity" && DOMAIN_PALETTE[cat]) {
+        return DOMAIN_PALETTE[cat].hue;
+      }
+      for (const key in DOMAIN_PALETTE) {
+        if (key !== "default" && key !== "named_entity" && cat.includes(key)) {
+          return DOMAIN_PALETTE[key].hue;
+        }
+      }
+      // If generalized named entity or default, color by its Leiden cluster
+      const c = node.cluster !== undefined ? node.cluster : 0;
+      return PALETTE[c % PALETTE.length];
+    }
+
     function getNodeVisualState(node) {
       const domain = getNodeDomainMeta(node.category);
       const z = node.z_score || 0.0;
@@ -420,26 +436,26 @@
       }
     }
 
-    // Force simulation with galactic separation: tight intra-cluster gravity + inter-cluster lobe repulsion
+    // Force simulation with galactic separation: wide expansive manifold + inter-cluster lobe repulsion
     const simulation = d3.forceSimulation(nodes)
       .force('link', d3.forceLink(links).id(d => d.id)
         .distance(d => {
           const s = (typeof d.source === 'object') ? d.source : nodeMap.get(d.source);
           const t = (typeof d.target === 'object') ? d.target : nodeMap.get(d.target);
           const isSame = s && t && s.cluster !== undefined && s.cluster === t.cluster;
-          return isSame ? (22 + (1 / (d.weight || 0.5)) * 14) : (90 + (1 / (d.weight || 0.5)) * 30);
+          return isSame ? (36 + (1 / (d.weight || 0.5)) * 20) : (115 + (1 / (d.weight || 0.5)) * 38);
         })
         .strength(d => {
           const s = (typeof d.source === 'object') ? d.source : nodeMap.get(d.source);
           const t = (typeof d.target === 'object') ? d.target : nodeMap.get(d.target);
           const isSame = s && t && s.cluster !== undefined && s.cluster === t.cluster;
-          return isSame ? 0.25 : 0.035;
+          return isSame ? 0.16 : 0.025;
         })
       )
-      .force('charge', d3.forceManyBody().strength(d => -20 - d.r * 5).distanceMax(400))
-      .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('collision', d3.forceCollide().radius(d => d.r + 2.0).iterations(1))
-      .alphaDecay(0.025)
+      .force('charge', d3.forceManyBody().strength(d => -60 - (d.r || 3) * 7).distanceMax(650))
+      .force('center', d3.forceCenter(width / 2, height / 2).strength(0.04))
+      .force('collision', d3.forceCollide().radius(d => (d.r || 3) + 3.2).iterations(1))
+      .alphaDecay(0.022)
       .on('tick', requestTick);
 
     let transform = d3.zoomIdentity;
@@ -508,25 +524,27 @@
         .sort((a, b) => b[1].length - a[1].length)
         .slice(0, 6);
 
-      for (const [cIdx, cNodes] of topClusters) {
-        if (cNodes.length < 8) continue;
-        let sumX = 0, sumY = 0;
-        for (const n of cNodes) { sumX += n.x; sumY += n.y; }
-        const cx = sumX / cNodes.length;
-        const cy = sumY / cNodes.length;
+      if (topClusters.length > 1) {
+        for (const [cIdx, cNodes] of topClusters) {
+          if (cNodes.length < 12) continue;
+          let sumX = 0, sumY = 0;
+          for (const n of cNodes) { sumX += n.x; sumY += n.y; }
+          const cx = sumX / cNodes.length;
+          const cy = sumY / cNodes.length;
 
-        let maxDist = 0;
-        for (const n of cNodes) {
-          const d = Math.hypot(n.x - cx, n.y - cy);
-          if (d > maxDist) maxDist = d;
+          let maxDist = 0;
+          for (const n of cNodes) {
+            const d = Math.hypot(n.x - cx, n.y - cy);
+            if (d > maxDist) maxDist = d;
+          }
+          const radius = Math.min(220, Math.max(50, maxDist * 0.7));
+          const cMeta = getClusterMeta(cIdx);
+
+          ctx.beginPath();
+          ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+          ctx.fillStyle = cMeta.color + '07'; // Subtle 3% ambient celestial glow
+          ctx.fill();
         }
-        const radius = Math.min(280, Math.max(60, maxDist + 25));
-        const cMeta = getClusterMeta(cIdx);
-
-        ctx.beginPath();
-        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-        ctx.fillStyle = cMeta.color + '0a'; // Soft 4% flat ambient halo
-        ctx.fill();
       }
 
       // 1. Batched Link Rendering (High-Performance GPU Path Batching)
@@ -602,15 +620,14 @@
           continue;
         }
 
-        const cMeta = getClusterMeta(node.cluster);
-        const col = cMeta.color;
+        const col = getNodeColor(node);
         if (!colorNodePaths.has(col)) colorNodePaths.set(col, new Path2D());
         const p = colorNodePaths.get(col);
         p.moveTo(node.x + node.r, node.y);
         p.arc(node.x, node.y, node.r, 0, Math.PI * 2);
       }
 
-      // Draw all nodes in ~8 batched GPU calls with zero shadowBlur
+      // Draw all nodes in batched GPU calls with zero shadowBlur
       ctx.shadowBlur = 0;
       for (const [col, p] of colorNodePaths) {
         ctx.fillStyle = col;
@@ -620,19 +637,19 @@
       // Draw ONLY the actively hovered or selected node on top with radiant aura
       if (activeNodeObj) {
         const { node, isSelected } = activeNodeObj;
-        const cMeta = getClusterMeta(node.cluster);
+        const col = getNodeColor(node);
         const baseR = node.r * 1.5;
 
         ctx.beginPath();
         ctx.arc(node.x, node.y, baseR, 0, Math.PI * 2);
         ctx.fillStyle = '#ffffff';
-        ctx.shadowColor = cMeta.color;
+        ctx.shadowColor = col;
         ctx.shadowBlur = isSelected ? 14 : 10;
         ctx.fill();
 
         ctx.beginPath();
         ctx.arc(node.x, node.y, baseR + 3, 0, Math.PI * 2);
-        ctx.strokeStyle = cMeta.color;
+        ctx.strokeStyle = col;
         ctx.lineWidth = 1.5 / transform.k;
         ctx.stroke();
 
@@ -908,18 +925,17 @@
             existing.age_seconds = rn.age_seconds || 0;
             existing.first_seen_str = rn.first_seen_str || 'Recently';
             existing.last_seen_str = rn.last_seen_str || 'Just now';
-            existing.freshness_regime = rn.freshness_regime || 'ACTIVE';
-            existing.r = rn.r || (existing.isSurging ? 5.2 : 3.0);
+            existing.r = rn.r || Math.max(3.0, Math.min(8.5, 2.8 + Math.log1p(rn.degree || 1) * 0.9));
           } else {
             const angle = Math.random() * Math.PI * 2;
-            const dist = 80 + Math.random() * 220;
+            const dist = 120 + Math.random() * 420;
             const newNode = {
               id: rn.id,
               label: rn.label,
               category: rn.category || 'DEFAULT',
               cluster: rn.cluster,
               degree: rn.degree || 1,
-              r: rn.r || (rn.is_surging ? 5.2 : 3.0),
+              r: rn.r || Math.max(3.0, Math.min(8.5, 2.8 + Math.log1p(rn.degree || 1) * 0.9)),
               z_score: rn.z_score || 0.0,
               isSurging: rn.is_surging || (rn.z_score >= 10.0),
               trigger_text: rn.trigger_text || '',

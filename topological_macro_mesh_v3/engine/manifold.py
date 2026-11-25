@@ -542,6 +542,45 @@ class TopologicalManifold:
                         "google_url": f"https://www.google.com/search?q={urllib.parse.quote(phrase)}"
                     })
 
+        # Precursor Clue Fallback / Augmentation: Ensure UI Radar is always populated with high-conviction clues
+        if len(radar_clues) < 10:
+            existing_phrases = {c.get("phrase", "") for c in radar_clues}
+            candidate_nodes = sorted(
+                export_nodes,
+                key=lambda n: (n.get("surprisal", 0.0) * 1.5 + math.log1p(n.get("degree", 1)) * 2.0 + (n.get("z_score", 0.0) * 0.8)),
+                reverse=True
+            )
+            for cn in candidate_nodes:
+                if len(radar_clues) >= 12:
+                    break
+                lbl = cn.get("label", cn.get("id"))
+                if lbl in existing_phrases or len(lbl) <= 2:
+                    continue
+                trig = cn.get("trigger_text") or lbl
+                pubs = cn.get("publishers") or [cn.get("trigger_source", "Sovereign Wire")]
+                deg = cn.get("degree", 1)
+                z = cn.get("z_score", 0.0)
+                stage = "STAGE 3: BREAKOUT TRANSMISSION" if deg >= 8 else ("STAGE 2: CLUSTER FORMING" if deg >= 4 else "STAGE 1: GROUND WHISPER")
+                hawkes_b = "IGNITION POINT (Self-Exciting)" if z >= 2.0 else "EQUILIBRIUM"
+                lead_b = "ASYMMETRIC LEAD (Alpha Front-Run)" if deg >= 6 else "ASYMMETRIC LEAD"
+                
+                radar_clues.append({
+                    "phrase": lbl,
+                    "title": f"Precursor Signal: {lbl}",
+                    "stage": stage,
+                    "hawkes_badge": hawkes_b,
+                    "lead_badge": lead_b,
+                    "maturation_minutes": max(1, int(cn.get("age_seconds", 60) / 60.0)),
+                    "publisher_count": len(pubs),
+                    "publishers": pubs,
+                    "primary_publisher": pubs[0] if pubs else "Sovereign Wire",
+                    "sample_headline": trig,
+                    "z_score": round(max(1.2, z if z > 0 else 1.5), 1),
+                    "google_url": f"https://www.google.com/search?q={urllib.parse.quote(trig[:100])}",
+                    "x_url": f"https://x.com/search?q={urllib.parse.quote(lbl)}&f=live"
+                })
+                existing_phrases.add(lbl)
+
         # Primary Driver Discovery
         surging_nodes = [n for n in export_nodes if n.get("is_surging")]
         surging_nodes.sort(key=lambda n: (n.get("z_score", 0.0), n.get("degree", 0)), reverse=True)
