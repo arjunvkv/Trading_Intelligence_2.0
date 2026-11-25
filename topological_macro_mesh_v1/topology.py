@@ -81,6 +81,7 @@ class TopologyEngine:
         self.phrase_sources = defaultdict(set)
         self.phrase_contexts = defaultdict(list)
         self.phrase_doc_counts = defaultdict(int) # Background document frequency
+        self.word_doc_frequencies = defaultdict(int) # Empirical Zipf's law document frequency
         self.total_docs_seen = 0
         self.gold_docs_seen = 0
         self.gold_co_occurrences = defaultdict(int)
@@ -122,14 +123,18 @@ class TopologyEngine:
         words = re.findall(r'[a-zA-Z]{3,}', cleaned)
         
         filtered = []
+        total_docs = max(10, self.total_docs_seen)
         for w in words:
             if w in STOPWORDS:
+                continue
+            # Dynamic Zipf's Law Statistical Particle Filter (Threshold: > 28% of all documents)
+            if self.total_docs_seen >= 30 and (self.word_doc_frequencies.get(w, 0) / total_docs) >= 0.28:
                 continue
             if len(w) >= 4:
                 filtered.append(w)
             elif len(w) == 3:
-                # Keep only recognized macro commodities/terms or raw uppercase acronyms
-                if w in MACRO_3LETTER_ALLOWLIST or w.upper() in uppercase_3_acronyms:
+                # Keep recognized macro commodities/terms, raw uppercase acronyms, or multi-publisher verified tokens
+                if w in MACRO_3LETTER_ALLOWLIST or w.upper() in uppercase_3_acronyms or len(self.token_publishers.get(w, [])) >= 2:
                     filtered.append(w)
         return filtered
 
@@ -162,6 +167,10 @@ class TopologyEngine:
             self.seen_items[item_key] = now
             if is_new_item:
                 self.total_docs_seen += 1
+                # Track empirical document frequencies for Zipf's Law statistical particle filtering
+                raw_words = set(re.findall(r'[a-zA-Z]{3,}', text.lower()))
+                for rw in raw_words:
+                    self.word_doc_frequencies[rw] += 1
 
             tokens = self._clean_tokens(text)
             ngrams = self._extract_ngrams(text)

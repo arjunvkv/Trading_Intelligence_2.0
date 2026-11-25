@@ -55,20 +55,36 @@ class DataCollector:
         # In-memory RSS feed cache: url -> (cached_at_ts, items_list)
         self.feed_cache: Dict[str, Tuple[float, List[Dict[str, str]]]] = {}
 
-        # Round-robin sovereign country intelligence roster (1 country queried per cycle)
-        self.country_round_robin_roster = [
-            ("US Macro/Treasuries", "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-US&gl=US&ceid=US:en"),
-            ("UK London LBMA", "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-GB&gl=GB&ceid=GB:en"),
-            ("Germany Bundesbank/Eurozone", "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-DE&gl=DE&ceid=DE:en"),
-            ("Poland NBP Sovereign Reserves", "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-PL&gl=PL&ceid=PL:en"),
-            ("Czech CNB Sovereign Reserves", "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-CZ&gl=CZ&ceid=CZ:en"),
-            ("Switzerland SNB Sovereign Hub", "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-CH&gl=CH&ceid=CH:en"),
-            ("China/HK Sovereign Hub", "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-HK&gl=HK&ceid=HK:en"),
-            ("India RBI Sovereign Gold Hub", "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-IN&gl=IN&ceid=IN:en"),
-            ("Singapore Asia FX", "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-SG&gl=SG&ceid=SG:en"),
-            ("Gulf OPEC/Energy", "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-AE&gl=AE&ceid=AE:en"),
-            ("Australia Gold Producer", "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-AU&gl=AU&ceid=AU:en"),
-            ("Japan BOJ/Yen", "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-JP&gl=JP&ceid=JP:en")
+        # Universal Planetary Sovereign Spectrum (24 Sovereign Epicenters across ISO 3166)
+        # Dynamically cycles 1 country per cycle with in-memory persistence and TTL caching
+        self.planetary_sovereign_roster = [
+            # G7 & Core Sovereign Debt Poles
+            ("US Macro/Treasuries", "US", "BUSINESS"),
+            ("UK London LBMA", "GB", "BUSINESS"),
+            ("Germany Bundesbank/Eurozone", "DE", "BUSINESS"),
+            ("France Sovereign Debt", "FR", "BUSINESS"),
+            ("Japan BOJ/Yen", "JP", "BUSINESS"),
+            ("Switzerland SNB Sovereign Hub", "CH", "BUSINESS"),
+            ("Canada Natural Resources", "CA", "BUSINESS"),
+            ("Italy BTP/Eurozone", "IT", "BUSINESS"),
+            # BRICS+ & Frontier Central Bank Bullion Accumulators
+            ("China/HK Sovereign Hub", "HK", "BUSINESS"),
+            ("India RBI Sovereign Gold Hub", "IN", "BUSINESS"),
+            ("Poland NBP Sovereign Reserves", "PL", "BUSINESS"),
+            ("Czech CNB Sovereign Reserves", "CZ", "BUSINESS"),
+            ("Turkey TCMB Gold Hub", "TR", "BUSINESS"),
+            ("Gulf OPEC/Energy", "AE", "BUSINESS"),
+            ("Saudi Arabia Capital", "SA", "BUSINESS"),
+            ("South Africa Precious Metals", "ZA", "BUSINESS"),
+            ("Brazil LatAm Sovereign", "BR", "BUSINESS"),
+            # Strategic Resource, Tech & Chokepoint Nodes
+            ("Singapore Asia FX", "SG", "BUSINESS"),
+            ("Australia Gold Producer", "AU", "BUSINESS"),
+            ("South Korea Tech/Trade", "KR", "BUSINESS"),
+            ("Taiwan Semiconductor/FX", "TW", "BUSINESS"),
+            ("Sweden Riksbank/Nordic", "SE", "BUSINESS"),
+            ("Norway Oil Fund/Oljefondet", "NO", "BUSINESS"),
+            ("Mexico Nearshoring/Silver", "MX", "BUSINESS")
         ]
         self.country_roster_index = 0
         self.country_intel_pools: Dict[str, List[Dict[str, str]]] = {}
@@ -209,13 +225,14 @@ class DataCollector:
         return items
 
     def fetch_round_robin_country_wires(self, max_items_per_country: int = 8) -> List[Dict[str, str]]:
-        """Rotates through top sovereign macro epicenters one country per cycle to eliminate 429 rate limits,
+        """Rotates through the 24 sovereign planetary epicenters one country per cycle to eliminate 429 rate limits,
         while maintaining the collective intelligence pool across all countries simultaneously."""
-        if not self.country_round_robin_roster:
+        if not self.planetary_sovereign_roster:
             return []
             
-        label, url = self.country_round_robin_roster[self.country_roster_index]
-        self.country_roster_index = (self.country_roster_index + 1) % len(self.country_round_robin_roster)
+        label, cc, topic = self.planetary_sovereign_roster[self.country_roster_index]
+        url = f"https://news.google.com/rss/headlines/section/topic/{topic}?hl=en-{cc}&gl={cc}&ceid={cc}:en"
+        self.country_roster_index = (self.country_roster_index + 1) % len(self.planetary_sovereign_roster)
         
         # Pull only this cycle's active sovereign country (1 single request per cycle)
         new_items = self.fetch_rss_items(url, f"Sovereign: {label}", max_items=max_items_per_country, ttl_seconds=60.0)
@@ -263,16 +280,20 @@ class DataCollector:
         items = []
         tickers = [
             ('GC=F', 'Yahoo Gold COMEX'),
+            ('SI=F', 'Yahoo Silver COMEX'),
             ('DX-Y.NYB', 'Yahoo Dollar Index'),
             ('^TNX', 'Yahoo US10Y Yield'),
-            ('CL=F', 'Yahoo Crude Oil')
+            ('CL=F', 'Yahoo Crude Oil'),
+            ('HG=F', 'Yahoo Copper COMEX'),
+            ('^VIX', 'Yahoo Volatility Index'),
+            ('BTC-USD', 'Yahoo Bitcoin Spot')
         ]
         for sym, source_label in tickers:
             url = f"https://finance.yahoo.com/rss/headline?s={sym}"
-            items.extend(self.fetch_rss_items(url, source_label, max_items=4))
+            items.extend(self.fetch_rss_items(url, source_label, max_items=4, ttl_seconds=120.0))
         
         # MarketWatch Top Stories (Official Dow Jones Feed)
-        items.extend(self.fetch_rss_items("https://feeds.content.dowjones.io/public/rss/mw_topstories", "MarketWatch Wire", max_items=6))
+        items.extend(self.fetch_rss_items("https://feeds.content.dowjones.io/public/rss/mw_topstories", "MarketWatch Wire", max_items=6, ttl_seconds=120.0))
         return items
 
     def fetch_wikipedia_crowd_pageviews(self, dynamic_topics: List[str] = None) -> List[Dict[str, str]]:
