@@ -88,7 +88,7 @@ class SovereignMeshDaemon:
         )
 
         elapsed = time.time() - start_time
-        graph_export = self.manifold.get_graph_export()
+        graph_export = self.manifold.get_graph_export(radar=self.radar)
         log(
             f"Cycle completed in {elapsed:.2f}s | Nodes: {graph_export['nodes_count']} | "
             f"Edges: {graph_export['links_count']} | Communities: {graph_export['communities_count']} | "
