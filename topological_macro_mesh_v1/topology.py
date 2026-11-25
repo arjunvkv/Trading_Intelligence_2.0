@@ -13,6 +13,7 @@ import re
 import html
 import heapq
 import urllib.parse
+import unicodedata
 from collections import defaultdict, deque
 from typing import List, Dict, Any, Tuple, Set
 try:
@@ -58,12 +59,22 @@ MACRO_3LETTER_ALLOWLIST = {
     'ust', 'war', 'aid', 'law', 'fx', 'tar'
 }
 
+# Invariant Macro Core Tokens: Protected from statistical stopword muting under any circumstance
+INVARIANT_MACRO_CORE = {
+    'fed', 'rates', 'rate', 'dollar', 'gold', 'yield', 'yields', 'inflation',
+    'treasury', 'treasuries', 'debt', 'bank', 'banks', 'central', 'oil', 'crude',
+    'war', 'sanctions', 'bonds', 'reserve', 'reserves', 'deficit', 'liquidity',
+    'tariff', 'tariffs', 'bullion', 'xau', 'dxy', 'tips', 'recession', 'debasement'
+}
+
 CROWD_SOURCES = {'wikimedia attention pulse', 'google crowd autocomplete', 'mastodon decentralized fediverse'}
 
 class TopologyEngine:
-    def __init__(self, half_life_seconds: float = 7200.0): # 2-hour half life
+    def __init__(self, half_life_seconds: float = 7200.0): # 2-hour half life for kinetic shocks
         self.half_life = half_life_seconds
+        self.structural_half_life = 28800.0 # 8-hour half life for sovereign reserve/debt anchors
         self.decay_constant = math.log(2) / self.half_life
+        self.structural_decay_constant = math.log(2) / self.structural_half_life
         self.lead_arbiter = LeadArbiter()
         self.wire_phrases = set()
         self.crowd_phrases = set()
@@ -114,8 +125,14 @@ class TopologyEngine:
     def _clean_tokens(self, text: str) -> List[str]:
         # Unescape HTML entities first
         text = html.unescape(text)
-        # Track uppercase 3-letter acronyms from raw text before lowercasing (e.g. 'CEO', 'TSA', 'BMW', 'ICC', 'WHO')
+        # Track uppercase 3-letter acronyms from raw text before lowercasing (e.g. 'CEO', 'TSA', 'BMW', 'ICC', 'WHO', 'COP', 'LNG')
         uppercase_3_acronyms = set(re.findall(r'\b[A-Z]{3}\b', text))
+
+        # Unicode Diacritic Normalization (e.g. Glapiński -> Glapinski, Erdoğan -> Erdogan, Złoty -> Zloty)
+        replacements = {'\u0142': 'l', '\u0141': 'L', '\u00f8': 'o', '\u00d8': 'O', '\u00e6': 'ae', '\u00c6': 'AE', '\u00df': 'ss'}
+        for k, v in replacements.items():
+            text = text.replace(k, v)
+        text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('ascii')
 
         # Strip all URLs, bare domains, and social handles before tokenizing
         cleaned = re.sub(r'(?:https?://|www\.|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}/)\S*', ' ', text.lower())
@@ -128,13 +145,15 @@ class TopologyEngine:
             if w in STOPWORDS:
                 continue
             # Dynamic Zipf's Law Statistical Particle Filter (Threshold: > 28% of all documents)
-            if self.total_docs_seen >= 30 and (self.word_doc_frequencies.get(w, 0) / total_docs) >= 0.28:
-                continue
+            # EXEMPTION: Invariant sovereign macro core tokens are NEVER muted as stopwords!
+            if w not in INVARIANT_MACRO_CORE:
+                if self.total_docs_seen >= 30 and (self.word_doc_frequencies.get(w, 0) / total_docs) >= 0.28:
+                    continue
             if len(w) >= 4:
                 filtered.append(w)
             elif len(w) == 3:
                 # Keep recognized macro commodities/terms, raw uppercase acronyms, or multi-publisher verified tokens
-                if w in MACRO_3LETTER_ALLOWLIST or w.upper() in uppercase_3_acronyms or len(self.token_publishers.get(w, [])) >= 2:
+                if w in MACRO_3LETTER_ALLOWLIST or w in INVARIANT_MACRO_CORE or w.upper() in uppercase_3_acronyms or len(self.token_publishers.get(w, [])) >= 2:
                     filtered.append(w)
         return filtered
 
@@ -353,10 +372,11 @@ class TopologyEngine:
                                 deg_b = max(2, len([e for e in self.edges if bridge in e]))
                                 ra_score += (w_tb * bridge_w) / math.log(1.0 + deg_b)
 
-                        # Mathematical threshold for topological transmission
-                        if ra_score >= 0.35:
-                            diffuse_w = round(min(2.2, 0.65 + (ra_score * 0.40)), 2)
-                            diffuse_te = round(min(0.80, 0.35 + (ra_score * 0.25)), 2)
+                        # Dynamic mathematical threshold for topological transmission
+                        ra_threshold = max(0.18, min(0.38, (sum(bw for _, bw in macro_bridges) / max(1, len(macro_bridges))) * 0.28))
+                        if ra_score >= ra_threshold:
+                            diffuse_w = round(min(2.5, 0.65 + (ra_score * 0.45)), 2)
+                            diffuse_te = round(min(0.85, 0.35 + (ra_score * 0.30)), 2)
                             edge_key = tuple(sorted([tok, "god_xau"]))
                             if edge_key not in self.edges:
                                 self.edges[edge_key] = {"weight": diffuse_w, "last_seen": now, "te": diffuse_te}
@@ -455,11 +475,11 @@ class TopologyEngine:
 
         return communities, community_meta
 
-    def get_surging_entities(self, top_k: int = 5) -> List[str]:
+    def get_surging_entities(self, top_k: int = None) -> List[str]:
         """
         Returns dynamic surging entities/tokens from the graph using Information Energy:
         E = Surprisal * Z-Score * Newsroom Quorum.
-        Guarantees that unpredicted real-world anomalies surge ahead of mundane recurring noise.
+        Scales top_k dynamically based on active graph communities.
         """
         candidates = []
         total_docs = max(10, self.total_docs_seen)
@@ -479,6 +499,9 @@ class TopologyEngine:
             candidates.append((nid, score, z, pubs))
         
         candidates.sort(key=lambda x: x[1], reverse=True)
+        if top_k is None:
+            active_clusters = len(set(d.get("cluster", 0) for d in self.nodes.values()))
+            top_k = max(5, min(14, active_clusters * 2))
         return [c[0] for c in candidates[:top_k]]
 
     def extract_emerging_constellations(self, top_k: int = 5) -> List[Dict[str, Any]]:
@@ -723,14 +746,18 @@ class TopologyEngine:
     def prune_and_decay(self):
         now = time.time()
         
-        # 1. Decay edge weights
+        # 1. Decay edge weights (Two-Speed Adaptive Half-Life: 2h Kinetic vs 8h Structural Macro)
         expired_edges = []
         for key, edge in self.edges.items():
             dt = now - edge["last_seen"]
-            decay = math.exp(-self.decay_constant * dt)
+            is_structural = (key[0] == "god_xau" or key[1] == "god_xau" or key[0] in INVARIANT_MACRO_CORE or key[1] in INVARIANT_MACRO_CORE)
+            decay_const = self.structural_decay_constant if is_structural else self.decay_constant
+            decay_half_life = self.structural_half_life if is_structural else self.half_life
+            
+            decay = math.exp(-decay_const * dt)
             edge["weight"] *= decay
-            min_thresh = 0.35 if (key[0] == "god_xau" or key[1] == "god_xau") else 0.12
-            if dt > self.half_life or edge["weight"] < min_thresh:
+            min_thresh = 0.30 if (key[0] == "god_xau" or key[1] == "god_xau") else 0.12
+            if dt > decay_half_life or edge["weight"] < min_thresh:
                 expired_edges.append(key)
         for key in expired_edges:
             del self.edges[key]
@@ -758,8 +785,10 @@ class TopologyEngine:
                 cull_nodes.add(nid)
                 continue
 
-            # Time expiration (older than half life with no recent mention)
-            if dt_last > self.half_life:
+            # Time expiration (older than adaptive half-life with no recent mention)
+            is_structural_node = (nid in INVARIANT_MACRO_CORE)
+            node_half_life = self.structural_half_life if is_structural_node else self.half_life
+            if dt_last > node_half_life:
                 cull_nodes.add(nid)
 
         for nid in cull_nodes:
@@ -781,8 +810,8 @@ class TopologyEngine:
             self.phrase_sources.pop(p, None)
             self.phrase_contexts.pop(p, None)
 
-        # 4. Graph Density Clamping (K-core topological resilience, expanding capacity to 500 nodes)
-        MAX_NODES = 500
+        # 4. Graph Density Clamping (K-core topological resilience, expanding capacity to 1000 nodes)
+        MAX_NODES = 1000
         if len(self.nodes) > MAX_NODES:
             # Score nodes by Degree * Mentions * Z-score
             # Retain well-connected 2-core hubs; cull isolated dead singletons first

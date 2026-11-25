@@ -41,8 +41,8 @@ class EngineService:
         """Single discovery, topology update, and Dual-Key arbiter cycle with 100% genuine data."""
         try:
             # 1. Fetch real unmanipulated streams with dynamic closed-loop steering from graph
-            dynamic_seeds = self.topology.get_surging_entities(top_k=5)
-            dynamic_search = "+OR+".join(dynamic_seeds[:4]) if dynamic_seeds else None
+            dynamic_seeds = self.topology.get_surging_entities() # dynamically scales with active clusters
+            dynamic_search = "+OR+".join(dynamic_seeds[:6]) if dynamic_seeds else None
             snapshot = self.collector.fetch_all(dynamic_seeds=dynamic_seeds, dynamic_search_query=dynamic_search)
             
             # 2. Ingest into topology (True multi-source provenance: Wires vs Crowd)

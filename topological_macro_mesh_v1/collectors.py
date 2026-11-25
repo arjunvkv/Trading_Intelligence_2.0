@@ -282,15 +282,19 @@ class DataCollector:
             ('GC=F', 'Yahoo Gold COMEX'),
             ('SI=F', 'Yahoo Silver COMEX'),
             ('DX-Y.NYB', 'Yahoo Dollar Index'),
-            ('^TNX', 'Yahoo US10Y Yield'),
-            ('CL=F', 'Yahoo Crude Oil'),
+            ('^TNX', 'Yahoo US10Y Nominal Yield'),
+            ('TIP', 'Yahoo TIPS US Real Yield ETF'),
+            ('USDCNH=X', 'Yahoo Offshore Chinese Yuan'),
+            ('USDJPY=X', 'Yahoo Japanese Yen'),
+            ('CL=F', 'Yahoo WTI Crude Oil'),
+            ('BZ=F', 'Yahoo Brent Crude Oil'),
             ('HG=F', 'Yahoo Copper COMEX'),
             ('^VIX', 'Yahoo Volatility Index'),
             ('BTC-USD', 'Yahoo Bitcoin Spot')
         ]
         for sym, source_label in tickers:
             url = f"https://finance.yahoo.com/rss/headline?s={sym}"
-            items.extend(self.fetch_rss_items(url, source_label, max_items=4, ttl_seconds=120.0))
+            items.extend(self.fetch_rss_items(url, source_label, max_items=3, ttl_seconds=120.0))
         
         # MarketWatch Top Stories (Official Dow Jones Feed)
         items.extend(self.fetch_rss_items("https://feeds.content.dowjones.io/public/rss/mw_topstories", "MarketWatch Wire", max_items=6, ttl_seconds=120.0))
