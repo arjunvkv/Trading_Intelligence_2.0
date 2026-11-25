@@ -15,7 +15,7 @@ import heapq
 import urllib.parse
 import unicodedata
 from collections import defaultdict, deque
-from typing import List, Dict, Any, Tuple, Set
+from typing import List, Dict, Any, Tuple, Set, Optional
 try:
     from lead_arbiter import LeadArbiter
 except ImportError:
@@ -82,7 +82,7 @@ class TopologyEngine:
         # Strip all HTML tags and remnant encoded character entities
         text = re.sub(r'<[^>]+>', ' ', text)
         text = re.sub(r'&[a-zA-Z0-9#]+;', ' ', text)
-        # Track uppercase 3-to-4 letter acronyms from raw text before lowercasing (e.g. 'FED', 'ECB', 'BOJ', 'CPI', 'GDP', 'PBOC', 'XAU', 'DXY')
+        # Track uppercase 3-to-4 letter acronyms from raw text before lowercasing (e.g. 'FED', 'ECB', 'BOJ', 'CPI', 'GDP', 'PBOC', 'IMF', 'DXY')
         uppercase_acronyms = set(re.findall(r'\b[A-Z]{3,4}\b', text))
 
         # Unicode Diacritic Normalization (e.g. Glapiński -> Glapinski, Erdoğan -> Erdogan, Złoty -> Zloty)
@@ -279,12 +279,19 @@ class TopologyEngine:
     def find_shortest_causal_path(self, start_token: str, target: str = None) -> Tuple[List[str], float]:
         """
         Dijkstra's Algorithm over Transfer Entropy / Edge Weights to find the true
-        mathematical transmission pipeline from an emerging entity to the target asset.
+        mathematical transmission pipeline from an emerging entity to the dominant sovereign macro hub.
         """
-        if target is None:
-            target = "gold" if "gold" in self.nodes else ("xau" if "xau" in self.nodes else None)
+        if not self.nodes or start_token not in self.nodes:
+            return ([start_token], 0.0)
 
-        if not target or target not in self.nodes or start_token not in self.nodes:
+        if target is None:
+            # Organically identify the dominant sovereign macro hub by connectivity and multi-publisher corroboration
+            target = max(
+                self.nodes.keys(),
+                key=lambda n: (self.token_mentions.get(n, 1) * math.sqrt(len(self.token_publishers.get(n, []))))
+            )
+
+        if not target or target not in self.nodes:
             return ([start_token], 0.0)
 
         if start_token == target:
@@ -490,7 +497,7 @@ class TopologyEngine:
             cand_clusters = [self.nodes[t]["cluster"] for t in p_tokens if t in self.nodes]
             cand_cluster = max(set(cand_clusters), key=cand_clusters.count) if cand_clusters else 0
             
-            # Mathematical Dijkstra transmission path through edge weights to Gold/Asset
+            # Mathematical Dijkstra transmission path through edge weights to dominant macro hub
             causal_path, path_weight = self.find_shortest_causal_path(p_tokens[0] if p_tokens else phrase)
             causal = self.lead_arbiter.derive_causal_pathway(
                 context_headline,
@@ -550,7 +557,8 @@ class TopologyEngine:
                 "causal_pipeline": causal["pipeline"],
                 "causal_pipeline_name": causal["pipeline_name"],
                 "transmission_chain": causal["transmission_chain"],
-                "expected_gold_impact": causal["expected_gold_impact"],
+                "systemic_macro_bias": causal.get("systemic_macro_bias", causal.get("expected_gold_impact", "")),
+                "expected_gold_impact": causal.get("systemic_macro_bias", causal.get("expected_gold_impact", "")),
                 "inflection_summary": causal["inflection_summary"],
                 "lead_type": lead_type,
                 "lead_desc": lead_desc,
@@ -595,7 +603,7 @@ class TopologyEngine:
 
         return deduped
 
-    def _compute_graph_topology(self) -> Tuple[Dict[str, int], Dict[str, int], Dict[str, List[str]]]:
+    def _compute_graph_topology(self) -> Tuple[Dict[str, int], Dict[str, int], Dict[str, List[str]], Optional[str]]:
         adj = defaultdict(set)
         for (src, tgt) in self.edges.keys():
             if src in self.nodes and tgt in self.nodes:
@@ -604,21 +612,28 @@ class TopologyEngine:
 
         degrees = {nid: len(adj[nid]) for nid in self.nodes}
 
-        asset_id = "gold" if "gold" in self.nodes else ("xau" if "xau" in self.nodes else None)
-        hops_to_asset = {nid: 999 for nid in self.nodes}
+        # Dynamic sovereign macro hub: highest degree node corroborated across publishers
+        dominant_hub = None
+        if self.nodes:
+            dominant_hub = max(
+                self.nodes.keys(),
+                key=lambda n: (degrees.get(n, 0), len(self.token_publishers.get(n, [])))
+            )
 
-        if asset_id:
-            hops_to_asset[asset_id] = 0
-            queue = deque([asset_id])
-            visited = {asset_id}
+        hops_to_hub = {nid: 999 for nid in self.nodes}
+
+        if dominant_hub:
+            hops_to_hub[dominant_hub] = 0
+            queue = deque([dominant_hub])
+            visited = {dominant_hub}
 
             while queue:
                 curr = queue.popleft()
-                curr_dist = hops_to_asset[curr]
+                curr_dist = hops_to_hub[curr]
                 for neighbor in adj[curr]:
                     if neighbor not in visited:
                         visited.add(neighbor)
-                        hops_to_asset[neighbor] = curr_dist + 1
+                        hops_to_hub[neighbor] = curr_dist + 1
                         queue.append(neighbor)
 
         comp_visited = set()
@@ -639,7 +654,7 @@ class TopologyEngine:
                 components[comp_idx] = comp_members
                 comp_idx += 1
 
-        return degrees, hops_to_asset, components
+        return degrees, hops_to_hub, components, dominant_hub
 
     def prune_and_decay(self):
         now = time.time()
@@ -665,7 +680,7 @@ class TopologyEngine:
             del self.edges[key]
 
         # 2. Mathematical Reachability & Orphan Culling
-        degrees, hops_to_asset, components = self._compute_graph_topology()
+        degrees, hops_to_hub, components, _ = self._compute_graph_topology()
 
         cull_nodes = set()
         for nid, data in self.nodes.items():
@@ -730,7 +745,7 @@ class TopologyEngine:
 
     def export_graph_json(self) -> Dict[str, Any]:
         self.prune_and_decay()
-        degrees, hops_to_asset, _ = self._compute_graph_topology()
+        degrees, hops_to_hub, _, dominant_hub = self._compute_graph_topology()
         communities, community_meta = self._discover_communities()
 
         # Map each node to its dynamic emergent community
@@ -778,7 +793,7 @@ class TopologyEngine:
             # Extract verification and provenance
             pubs = list(self.token_publishers.get(nid, []))
             is_crowd = (self.token_is_crowd.get(nid, False) and not self.token_is_wire.get(nid, False))
-            is_asset = (nid.lower() in {'gold', 'xau', 'silver', 'dxy', 'us10y', 'cl', 'brent'})
+            is_hub = (nid == dominant_hub)
             clean_trigger = self._format_trigger_text(d.get("trigger_text", nid), 220)
             q_google = urllib.parse.quote(clean_trigger[:100])
             q_x = urllib.parse.quote(nid)
@@ -796,7 +811,8 @@ class TopologyEngine:
                 "surprisal": d.get("surprisal", 0.0),
                 "info_energy": d.get("info_energy", 0.0),
                 "is_surging": d.get("is_surging", False),
-                "is_asset": is_asset,
+                "is_asset": False,
+                "is_hub": is_hub,
                 "is_crowd": is_crowd,
                 "r": node_r,
                 "trigger_text": clean_trigger,
@@ -805,7 +821,8 @@ class TopologyEngine:
                 "publisher_count": len(pubs),
                 "mention_count": self.token_mentions.get(nid, 1),
                 "degree": deg,
-                "hops_to_xau": hops_to_asset.get(nid, 999),
+                "hops_to_hub": hops_to_hub.get(nid, 999),
+                "hops_to_xau": hops_to_hub.get(nid, 999),
                 "age_seconds": age_sec,
                 "last_seen_seconds_ago": last_seen_sec,
                 "first_seen_str": first_str,
@@ -839,6 +856,7 @@ class TopologyEngine:
         if eligible_drivers:
             top_c = eligible_drivers[0]
             clean_pubs = [p for p in top_c["publishers"] if "crowd" not in p.lower() and "wiki" not in p.lower() and "autocomplete" not in p.lower()]
+            bias_val = top_c.get("systemic_macro_bias", top_c.get("expected_gold_impact", ""))
             primary_driver = {
                 "active": True,
                 "headline": top_c["sample_headline"],
@@ -853,7 +871,8 @@ class TopologyEngine:
                 "hawkes_badge": top_c.get("hawkes_badge", ""),
                 "causal_pipeline": top_c.get("causal_pipeline_name", ""),
                 "transmission_chain": top_c.get("transmission_chain", ""),
-                "expected_impact": top_c.get("expected_gold_impact", ""),
+                "systemic_macro_bias": bias_val,
+                "expected_impact": bias_val,
                 "lead_badge": top_c.get("lead_badge", ""),
                 "inflection_summary": top_c.get("inflection_summary", ""),
                 "verify_google": top_c["google_url"],
@@ -870,12 +889,13 @@ class TopologyEngine:
                 "transmission": "Structural balance",
                 "regime": "NEUTRAL",
                 "lead_window": "0m",
-                "verify_google": "https://www.google.com/search?q=xauusd+gold",
-                "verify_x": "https://x.com/search?q=gold%20xauusd&f=live"
+                "verify_google": "https://www.google.com/search?q=macro+geopolitics+breaking+news",
+                "verify_x": "https://x.com/search?q=macro%20geopolitics&f=live"
             }
 
         return {
             "timestamp": time.time(),
+            "dominant_hub": dominant_hub,
             "nodes": nodes_out,
             "links": links_out,
             "communities": [

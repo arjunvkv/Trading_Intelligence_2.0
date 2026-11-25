@@ -169,13 +169,14 @@ class LeadArbiter:
                 "pipeline": "CROWD_RESEARCH_PULSE",
                 "pipeline_name": "Crowd Research Pulse (Lagging Public Query)",
                 "transmission_chain": "Public Query Curiosity ➔ Retail Sentiment Drift (Unconfirmed on Institutional Wires)",
+                "systemic_macro_bias": "NEUTRAL_CROWD_PULSE",
                 "expected_gold_impact": "NEUTRAL_CROWD_PULSE",
                 "inflection_window_min": 0,
                 "inflection_window_max": 0,
                 "inflection_summary": "Retail crowd curiosity; unconfirmed on sovereign institutional wires"
             }
 
-        # 2. Dynamic graph-derived geodesic transmission chain (Dijkstra optimal path to Asset)
+        # 2. Dynamic graph-derived geodesic transmission chain (Dijkstra optimal path to dominant macro hub)
         if transmission_path and len(transmission_path) >= 2:
             clean_labels = [t.replace("_", " ").title() for t in transmission_path]
             transmission = " ➔ ".join(clean_labels)
@@ -183,22 +184,22 @@ class LeadArbiter:
             pipe_name = f"{lead_entity} Geodesic Transmission"
             pipeline = f"{transmission_path[0].upper()}_VECTOR"
             inflection_minutes = (max(5, len(transmission_path) * 4), len(transmission_path) * 8 + 10)
-            gold_bias = "VOLATILITY_EXPANSION" if len(transmission_path) <= 3 else "STRUCTURAL_DIFFUSION"
+            macro_bias = "VOLATILITY_EXPANSION" if len(transmission_path) <= 3 else "STRUCTURAL_DIFFUSION"
             inflection_summary = f"Expected tape response within {inflection_minutes[0]}-{inflection_minutes[1]} mins ({len(transmission_path)} hops)"
         elif transmission_path and len(transmission_path) == 1:
             lead_entity = transmission_path[0].replace("_", " ").title()
-            transmission = f"{lead_entity} (Organic community development; no active transmission bridge to asset)"
+            transmission = f"{lead_entity} (Organic community development; dynamic transmission bridge)"
             pipe_name = f"{lead_entity} Thematic Flow"
             pipeline = f"{transmission_path[0].upper()}_VECTOR"
-            gold_bias = "EQUILIBRIUM_SEEKING"
+            macro_bias = "EQUILIBRIUM_SEEKING"
             inflection_minutes = (20, 45)
             inflection_summary = f"{lead_entity} cluster developing organically in world news"
         else:
             # Dynamic graph diffusion fallback
             pipeline = "STRUCTURAL_DIFFUSION"
             pipe_name = "Topological Graph Diffusion"
-            transmission = "Multi-Hop Cross-Cluster Transmission ➔ Orderbook Liquidity Absorption"
-            gold_bias = "EQUILIBRIUM_SEEKING"
+            transmission = "Multi-Hop Cross-Cluster Transmission ➔ Global Liquidity Absorption"
+            macro_bias = "EQUILIBRIUM_SEEKING"
             inflection_minutes = (15, 35)
             inflection_summary = "Expected tape response within 15-35 mins (diffuse network propagation)"
 
@@ -206,7 +207,8 @@ class LeadArbiter:
             "pipeline": pipeline,
             "pipeline_name": pipe_name,
             "transmission_chain": transmission,
-            "expected_gold_impact": gold_bias,
+            "systemic_macro_bias": macro_bias,
+            "expected_gold_impact": macro_bias,
             "inflection_window_min": inflection_minutes[0],
             "inflection_window_max": inflection_minutes[1],
             "inflection_summary": inflection_summary
@@ -254,33 +256,35 @@ class LeadArbiter:
         self, 
         cluster_name: str, 
         z_score: float, 
-        hops_to_xau: int,
+        hops_to_hub: int = 2,
         wire_z_scores: List[float] = None,
-        crowd_z_scores: List[float] = None
+        crowd_z_scores: List[float] = None,
+        **kwargs
     ) -> Dict[str, Any]:
         """
         Evaluates dynamic alpha windows from graph geodesic distance and session conductivity.
         ZERO hardcoded minute tables.
         """
+        effective_hops = kwargs.get("hops_to_xau", hops_to_hub)
         sess = self.get_active_session_conductivity()
         att_div = self.calculate_attention_divergence(wire_z_scores or [], crowd_z_scores or [])
         
         # Empirical Geodesic Information Diffusion Model
         # Logarithmic saturation curve replacing linear hop magic numbers
-        hops = max(1, hops_to_xau if hops_to_xau < 99 else 3)
+        hops = max(1, effective_hops if effective_hops < 99 else 3)
         base_diffusion = 2.5 + (math.log(1.0 + hops) * 6.0)
         adj_min = max(2, round((base_diffusion * 0.65) * sess["lag_multiplier"]))
         adj_max = max(5, round((base_diffusion * 1.75) * sess["lag_multiplier"]))
 
         # Dynamic Market Physics
         if hops == 1:
-            regime = "DIRECT TRANSMISSION: Immediate Cash / Paper Repricing"
+            regime = "DIRECT TRANSMISSION: Immediate Cash / Sovereign Flow Repricing"
             bias = "DIRECT LIQUIDITY ABSORPTION"
         elif hops == 2:
-            regime = "TWO-PHASE: Phase 1 Margin Liquidation -> Phase 2 Debasement Flight"
+            regime = "TWO-PHASE: Phase 1 Liquidity Cascades -> Phase 2 Structural Flight"
             bias = "INTERMARKET FLOW CONFIRMATION"
         else:
-            regime = "ASYMMETRY: Distant Supply Chain / Structural Lag"
+            regime = "ASYMMETRY: Distant Supply Chain / Geopolitical Lag"
             bias = "PRECURSOR ACCUMULATION"
 
         return {
@@ -288,7 +292,7 @@ class LeadArbiter:
             "market_phase": regime,
             "orderbook_bias": bias,
             "session_conductivity": f"{round(sess['conductivity'] * 100)}% ({sess['session']})",
-            "hops_distance": f"{hops} Hop{'s' if hops != 1 else ''} to XAUUSD",
+            "hops_distance": f"{hops} Hop{'s' if hops != 1 else ''} to Core Hub",
             "attention_divergence": att_div
         }
 

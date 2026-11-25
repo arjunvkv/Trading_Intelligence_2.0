@@ -2,7 +2,7 @@
 <html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
-  <title>XAUUSD Topological Constellation Mesh & Kinetic Lead Engine</title>
+  <title>Sovereign Macro Topological Constellation Mesh & Kinetic Lead Engine</title>
   <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
   <script src="/d3.v7.min.js"></script>
   <style>
@@ -224,7 +224,7 @@
 
       <!-- Active Causal Transmission Pipeline -->
       <div>
-        <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block mb-2">Causal Transmission Path to Gold</span>
+        <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block mb-2">Causal Transmission Path to Core Hub</span>
         <div id="insp-pipeline" class="space-y-1.5 text-xs">
           <!-- Dynamically populated shortest path hops -->
         </div>
@@ -329,12 +329,19 @@
     }
     requestAnimationFrame(renderCanvas);
 
-    function findShortestPathToGold(startNode) {
-      if (!startNode) return [];
-      const targetAsset = nodes.find(n => n.id === 'gold' || n.id === 'xau' || n.is_asset);
-      if (!targetAsset || startNode.id === targetAsset.id) return [];
+    function getDominantHub() {
+      if (!nodes || nodes.length === 0) return null;
+      const flagged = nodes.find(n => n.is_hub);
+      if (flagged) return flagged;
+      return nodes.reduce((maxN, curr) => ((curr.r || 0) > (maxN ? (maxN.r || 0) : -1) ? curr : maxN), null);
+    }
 
-      const targetId = targetAsset.id;
+    function findShortestPathToHub(startNode) {
+      if (!startNode) return [];
+      const targetHub = getDominantHub();
+      if (!targetHub || startNode.id === targetHub.id) return [];
+
+      const targetId = targetHub.id;
       const queue = [{ id: startNode.id, path: [] }];
       const visited = new Set([startNode.id]);
 
@@ -359,6 +366,7 @@
       }
       return [];
     }
+    const findShortestPathToGold = findShortestPathToHub;
 
     function ticked() {
       ctx.save();
@@ -459,11 +467,11 @@
         ctx.fill();
         ctx.shadowBlur = 0;
 
-        if (node.is_asset || node.id === 'gold' || node.id === 'xau') {
-          ctx.font = 'bold 11px ui-sans-serif, system-ui, sans-serif';
-          ctx.fillStyle = '#f59e0b';
+        if (node.is_hub) {
+          ctx.font = 'bold 10px ui-sans-serif, system-ui, sans-serif';
+          ctx.fillStyle = '#38bdf8';
           ctx.textAlign = 'center';
-          ctx.fillText('⚡ ' + node.label.toUpperCase(), node.x, node.y + node.r + 12);
+          ctx.fillText('CORE HUB ➔ ' + node.label.toUpperCase(), node.x, node.y + node.r + 12);
         }
       }
 
@@ -529,14 +537,14 @@
         document.getElementById('tt-cluster').innerText = c.name.toUpperCase();
         document.getElementById('tt-dot').style.background = c.color;
         
-        const shortest = findShortestPathToGold(found);
+        const shortest = findShortestPathToHub(found);
         const hops = shortest.length || 1;
         const leadMin = (c.avgLeadMin * (0.8 + (hops * 0.2))).toFixed(1);
         
         document.getElementById('tt-lead').innerText = `+${leadMin} min`;
         document.getElementById('tt-te').innerText = (0.65 + (found.r / 8) * 0.3).toFixed(2) + ' bit';
         document.getElementById('tt-accel').innerText = '+' + (2.0 + (found.r / 8) * 2.8).toFixed(1) + 'σ';
-        document.getElementById('tt-hops').innerText = `${hops} Hop${hops > 1 ? 's' : ''} to XAU`;
+        document.getElementById('tt-hops').innerText = `${hops} Hop${hops > 1 ? 's' : ''} to Core Hub`;
         document.getElementById('tt-bias').innerText = c.bias;
 
         tooltip.style.left = e.clientX + 'px';
@@ -563,7 +571,7 @@
 
     function selectNode(node) {
       selectedNode = node;
-      activePathEdges = findShortestPathToGold(node);
+      activePathEdges = findShortestPathToHub(node);
 
       const drawer = document.getElementById('inspector');
       document.getElementById('insp-name').innerText = node.label;
@@ -619,7 +627,7 @@
           </div>
           <p class="text-zinc-400">&bull; Freshness Status: <span class="font-mono px-1 py-0.2 rounded bg-zinc-800 text-cyan-300 text-[9px] font-bold">${freshness}</span></p>
           <p class="text-emerald-400">&bull; Poisson Arrival Velocity: <b>+${zVal}σ</b></p>
-          <p class="text-zinc-400">&bull; Geodesic Distance to Gold: <b>${hops} Hops</b></p>
+          <p class="text-zinc-400">&bull; Geodesic Distance to Core Hub: <b>${hops} Hops</b></p>
           <a href="${searchUrl}" target="_blank" class="block w-full py-1.5 px-2 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 text-center font-mono rounded border border-sky-500/40 text-[11px] mt-2 transition">
             🔍 Verify Real-World Wire on Google
           </a>
@@ -691,10 +699,10 @@
             existing.label = rn.label;
             existing.z_score = rn.z_score || 0.0;
             existing.isSurging = rn.is_surging || (rn.z_score >= 10.0);
-            existing.is_asset = rn.is_asset || false;
+            existing.is_hub = rn.is_hub || false;
             existing.trigger_text = rn.trigger_text || '';
             existing.trigger_source = rn.trigger_source || '';
-            existing.hops_to_xau = rn.hops_to_xau;
+            existing.hops_to_hub = rn.hops_to_hub !== undefined ? rn.hops_to_hub : rn.hops_to_xau;
             existing.age_seconds = rn.age_seconds || 0;
             existing.first_seen_str = rn.first_seen_str || 'Recently';
             existing.last_seen_str = rn.last_seen_str || 'Just now';
@@ -710,10 +718,10 @@
               r: rn.r || (rn.is_surging ? 5.2 : 3.0),
               z_score: rn.z_score || 0.0,
               isSurging: rn.is_surging || (rn.z_score >= 10.0),
-              is_asset: rn.is_asset || false,
+              is_hub: rn.is_hub || false,
               trigger_text: rn.trigger_text || '',
               trigger_source: rn.trigger_source || '',
-              hops_to_xau: rn.hops_to_xau,
+              hops_to_hub: rn.hops_to_hub !== undefined ? rn.hops_to_hub : rn.hops_to_xau,
               age_seconds: rn.age_seconds || 0,
               first_seen_str: rn.first_seen_str || 'Recently',
               last_seen_str: rn.last_seen_str || 'Just now',
@@ -880,7 +888,7 @@
           return currScore > prevScore ? curr : prev;
         }, clusterNodes[0]);
 
-        const shortest = findShortestPathToGold(centralNode);
+        const shortest = findShortestPathToHub(centralNode);
         const hops = Math.max(1, shortest.length);
         const dynamicTauMin = Math.round(hops * 6.5);
 

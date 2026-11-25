@@ -71,22 +71,22 @@ class DataCollector:
             ("Italy BTP/Eurozone", "IT", "BUSINESS"),
             # BRICS+ & Frontier Central Bank Bullion Accumulators
             ("China/HK Sovereign Hub", "HK", "BUSINESS"),
-            ("India RBI Sovereign Gold Hub", "IN", "BUSINESS"),
+            ("India RBI Sovereign Hub", "IN", "BUSINESS"),
             ("Poland NBP Sovereign Reserves", "PL", "BUSINESS"),
             ("Czech CNB Sovereign Reserves", "CZ", "BUSINESS"),
-            ("Turkey TCMB Gold Hub", "TR", "BUSINESS"),
+            ("Turkey TCMB Sovereign Hub", "TR", "BUSINESS"),
             ("Gulf OPEC/Energy", "AE", "BUSINESS"),
             ("Saudi Arabia Capital", "SA", "BUSINESS"),
-            ("South Africa Precious Metals", "ZA", "BUSINESS"),
+            ("South Africa Resource Hub", "ZA", "BUSINESS"),
             ("Brazil LatAm Sovereign", "BR", "BUSINESS"),
             # Strategic Resource, Tech & Chokepoint Nodes
             ("Singapore Asia FX", "SG", "BUSINESS"),
-            ("Australia Gold Producer", "AU", "BUSINESS"),
+            ("Australia Natural Resources", "AU", "BUSINESS"),
             ("South Korea Tech/Trade", "KR", "BUSINESS"),
             ("Taiwan Semiconductor/FX", "TW", "BUSINESS"),
             ("Sweden Riksbank/Nordic", "SE", "BUSINESS"),
             ("Norway Oil Fund/Oljefondet", "NO", "BUSINESS"),
-            ("Mexico Nearshoring/Silver", "MX", "BUSINESS")
+            ("Mexico Nearshoring & Trade", "MX", "BUSINESS")
         ]
         self.country_roster_index = 0
         self.country_intel_pools: Dict[str, List[Dict[str, str]]] = {}
@@ -301,18 +301,17 @@ class DataCollector:
     def fetch_intermarket_wires(self) -> List[Dict[str, str]]:
         items = []
         tickers = [
-            ('GC=F', 'Yahoo Gold COMEX'),
-            ('SI=F', 'Yahoo Silver COMEX'),
             ('DX-Y.NYB', 'Yahoo Dollar Index'),
             ('^TNX', 'Yahoo US10Y Nominal Yield'),
             ('TIP', 'Yahoo TIPS US Real Yield ETF'),
             ('USDCNH=X', 'Yahoo Offshore Chinese Yuan'),
             ('USDJPY=X', 'Yahoo Japanese Yen'),
+            ('EURUSD=X', 'Yahoo Euro Benchmark'),
             ('CL=F', 'Yahoo WTI Crude Oil'),
             ('BZ=F', 'Yahoo Brent Crude Oil'),
-            ('HG=F', 'Yahoo Copper COMEX'),
+            ('HG=F', 'Yahoo Copper Benchmark'),
             ('^VIX', 'Yahoo Volatility Index'),
-            ('BTC-USD', 'Yahoo Bitcoin Spot')
+            ('BTC-USD', 'Yahoo Bitcoin Benchmark')
         ]
         for sym, source_label in tickers:
             url = f"https://finance.yahoo.com/rss/headline?s={sym}"
@@ -322,26 +321,30 @@ class DataCollector:
         items.extend(self.fetch_rss_items("https://feeds.content.dowjones.io/public/rss/mw_topstories", "MarketWatch Wire", max_items=6, ttl_seconds=120.0))
         return items
 
-    def fetch_physical_bullion_and_vault_wires(self) -> List[Dict[str, str]]:
+    def fetch_sovereign_reserves_and_trade_flows(self) -> List[Dict[str, str]]:
         """
-        Dimension 4: Physical Bullion, Vault Inventories, Exchange Clearings & Sovereign Reserves.
-        Captures daily COMEX deliverable vault inventory drawdowns, Shanghai Gold Exchange (SGE)
-        cash premiums/discounts, LBMA physical clearings, and central bank bullion reserve acquisitions.
+        Dimension 4: Sovereign Reserves, Central Bank Balance Sheets, Critical Commodities & Trade Corridors.
+        Captures central bank foreign exchange reserve adjustments, sovereign wealth fund allocations,
+        strategic energy reserves, critical minerals trade, and bilateral currency settlements.
         """
         wires = []
-        # 1. Physical Exchanges & Vault Clearing (COMEX Vaults, SGE Fixing, LBMA, Physical Bullion)
-        url_exchanges = "https://news.google.com/rss/search?q=when:24h+(%22Shanghai+Gold+Exchange%22+OR+SGE+OR+%22COMEX+vault%22+OR+%22LBMA+clearing%22+OR+%22vault+inventory%22+OR+%22physical+gold%22)&hl=en-US&gl=US&ceid=US:en"
-        wires.extend(self.fetch_rss_items(url_exchanges, "Physical Bullion & Vault Exchanges", max_items=10, ttl_seconds=180.0))
+        # 1. Sovereign Foreign Exchange Reserves & Central Bank Balance Sheets
+        url_reserves = "https://news.google.com/rss/search?q=when:24h+(%22foreign+exchange+reserves%22+OR+%22central+bank+reserves%22+OR+%22sovereign+reserve%22+OR+%22reserve+assets%22+OR+%22bilateral+swap%22)&hl=en-US&gl=US&ceid=US:en"
+        wires.extend(self.fetch_rss_items(url_reserves, "Sovereign Reserve & Balance Sheet Dispatches", max_items=10, ttl_seconds=180.0))
 
-        # 2. Sovereign Official Central Bank Reserves & Bullion Allocations
-        url_reserves = "https://news.google.com/rss/search?q=when:24h+(%22gold+reserves%22+OR+%22bullion+purchase%22+OR+%22central+bank+gold%22+OR+%22monetary+gold%22)&hl=en-US&gl=US&ceid=US:en"
-        wires.extend(self.fetch_rss_items(url_reserves, "Sovereign Gold Reserve Dispatches", max_items=8, ttl_seconds=180.0))
+        # 2. Critical Commodities, Energy Corridors & Chokepoints
+        url_corridors = "https://news.google.com/rss/search?q=when:24h+(%22strategic+petroleum+reserve%22+OR+%22critical+minerals%22+OR+%22shipping+corridor%22+OR+%22trade+embargo%22+OR+%22pipeline+flow%22)&hl=en-US&gl=US&ceid=US:en"
+        wires.extend(self.fetch_rss_items(url_corridors, "Strategic Resources & Chokepoints", max_items=8, ttl_seconds=180.0))
 
-        # 3. Primary Mining Supply & Refinery Disruptions
-        url_mining = "https://news.google.com/rss/search?q=when:24h+(%22gold+production%22+OR+%22gold+mine%22+OR+%22mine+supply%22+OR+%22refinery%22+AND+gold)&hl=en-US&gl=US&ceid=US:en"
-        wires.extend(self.fetch_rss_items(url_mining, "Mining & Refinery Supply Front", max_items=8, ttl_seconds=180.0))
+        # 3. Sovereign Debt Auctions & Fiscal Stress
+        url_debt = "https://news.google.com/rss/search?q=when:24h+(%22treasury+auction%22+OR+%22sovereign+debt%22+OR+%22bond+issuance%22+OR+%22deficit+spending%22+OR+%22debt+ceiling%22)&hl=en-US&gl=US&ceid=US:en"
+        wires.extend(self.fetch_rss_items(url_debt, "Sovereign Debt & Fiscal Front", max_items=8, ttl_seconds=180.0))
 
         return wires
+
+    def fetch_physical_bullion_and_vault_wires(self) -> List[Dict[str, str]]:
+        """Alias redirect to pure sovereign reserves and trade flows (Zero asset bias)."""
+        return self.fetch_sovereign_reserves_and_trade_flows()
 
     def fetch_wikipedia_crowd_pageviews(self, dynamic_topics: List[str] = None) -> List[Dict[str, str]]:
         """Wikimedia Public Attention API: measures real-time crowd research on dynamic emerging macro nodes."""
@@ -349,9 +352,15 @@ class DataCollector:
         if not dynamic_topics:
             return []
 
+        # Filter out common abstract hypernyms, verbs, and particles that cause encyclopedic ambiguity
+        generic_hypernyms = {
+            'growth', 'after', 'will', 'have', 'from', 'first', 'said', 'today', 'more', 'about',
+            'news', 'into', 'some', 'than', 'over', 'time', 'year', 'look', 'part', 'make', 'take'
+        }
+
         topics = []
         for t in dynamic_topics:
-            if not t or len(t) < 3 or t.isdigit():
+            if not t or len(t) < 4 or t.isdigit() or t.lower() in generic_hypernyms:
                 continue
             clean_art = t.strip().replace(" ", "_").capitalize()
             topics.append((clean_art, t.strip().title()))
@@ -372,8 +381,11 @@ class DataCollector:
                         prev_v = items[-2]['views']
                         curr_v = items[-1]['views']
                         growth = ((curr_v - prev_v) / max(1, prev_v)) * 100.0
+                        # Require at least 25% DoD research velocity shift to avoid flat-line statistical noise
+                        if abs(growth) < 25.0:
+                            continue
                         sign = "+" if growth >= 0 else ""
-                        desc = f"Public research surge on {label} growth {sign}{growth:.1f}%"
+                        desc = f"Public research velocity on {label}: {sign}{growth:.1f}% DoD"
                         posts.append({
                             "source": f"Wikimedia: {label}",
                             "publisher": "Wikipedia Public Attention",
@@ -402,6 +414,23 @@ class DataCollector:
         clean = re.sub(r'\s+', ' ', clean).strip()
         if len(clean) < 25:
             return None
+
+        # Drop promotional trade show, expo, or spam tags
+        clean_lower = clean.lower()
+        if clean.startswith('[#') or 'tradeshow' in clean_lower or 'expo' in clean_lower or 'sponsored' in clean_lower:
+            return None
+
+        # Drop broken machine-translation scrape residue with consecutive commas or orphaned conjunctions
+        # (e.g. "focuses on , , and , bringing together , , and")
+        if re.search(r'(?:,\s*){2,}', clean) or re.search(r',\s*and\s*,', clean) or re.search(r'\s,\s', clean):
+            return None
+        
+        # Punctuation Density Filter: natural journalistic prose has comma+semicolon count <= 16% of total words
+        words_list = clean.split()
+        if len(words_list) >= 5:
+            punct_cnt = clean.count(',') + clean.count(';')
+            if (punct_cnt / len(words_list)) > 0.16:
+                return None
 
         # 1. Structural Debris / Noise Ratio: rho = (symbols + digits) / total_chars
         # Financial reporting satisfies rho < 0.15; URL/id clutter satisfies rho > 0.18
@@ -438,9 +467,9 @@ class DataCollector:
         if not dynamic_seeds:
             return []
         
-        posts = []
-        # Filter dynamic seeds to substantive alphabetic macro tokens
-        valid_seeds = [s.strip().lower() for s in dynamic_seeds if len(s.strip()) >= 3 and s.strip().isalpha()][:3]
+        # Filter dynamic seeds to substantive alphabetic macro tokens (>= 4 chars)
+        skip_particles = {'after', 'today', 'first', 'from', 'with', 'said', 'will', 'have', 'more', 'into', 'some', 'over'}
+        valid_seeds = [s.strip().lower() for s in dynamic_seeds if len(s.strip()) >= 4 and s.strip().isalpha() and s.strip().lower() not in skip_particles][:3]
         if not valid_seeds:
             return []
 
@@ -451,6 +480,7 @@ class DataCollector:
                 f"Mastodon {seed.title()} Stream"
             ))
 
+        posts = []
         for url, source_name in feeds:
             raw = self._fetch_safe(url, source_name, timeout=5)
             if raw:
@@ -475,14 +505,15 @@ class DataCollector:
         """
         Dynamic real-world search autocomplete trajectories.
         Uses Joint N-Gram Query Conditioning (collapsing consumer noise entropy) and
-        an Intermediary Semantic Overlap Gate to reject orthogonal consumer chatter.
+        an Intermediary Semantic Subspace Overlap Gate to reject orthogonal consumer chatter.
         """
         posts = []
         if not dynamic_seeds:
             return []
         
-        # Build joint search phrases from substantive tokens (never unconditioned single words like 'public')
-        valid_seeds = [s.strip().lower() for s in dynamic_seeds if len(s.strip()) >= 3 and s.strip().isalpha()]
+        # Build joint search phrases from substantive tokens (skip abstract hypernyms/particles like 'after', 'today')
+        skip_particles = {'after', 'today', 'first', 'from', 'with', 'said', 'will', 'have', 'more', 'into', 'some', 'over', 'what', 'when'}
+        valid_seeds = [s.strip().lower() for s in dynamic_seeds if len(s.strip()) >= 4 and s.strip().isalpha() and s.strip().lower() not in skip_particles]
         search_phrases = []
         if len(valid_seeds) >= 2:
             for i in range(min(4, len(valid_seeds) - 1)):
@@ -513,12 +544,15 @@ class DataCollector:
                         if len(set(s_words)) < 2:
                             continue
 
-                        # 2. Intermediary Semantic Overlap Gate:
-                        # Ensures the crowd suggestion shares semantic subspace overlap with live global news.
-                        # Eliminates orthogonal consumer chatter (e.g. 'public toilet near me') with ZERO hardcoded blacklists!
-                        if active_vocabulary:
-                            overlap = sum(1 for w in s_words if w in active_vocabulary)
-                            if overlap == 0:
+                        # 2. Intermediary Semantic Subspace Overlap Gate:
+                        # Requires at least 2 substantive tokens (>= 4 chars) to overlap with live newsroom dispatches,
+                        # AND at least 40% of the suggestion's substantive words must exist in active vocabulary.
+                        # Drops isolated cultural idioms (e.g. "after silver jubilee what next") and retail price queries.
+                        substantive_words = [w for w in s_words if len(w) >= 4 and w not in skip_particles]
+                        if active_vocabulary and substantive_words:
+                            overlap = sum(1 for w in substantive_words if w in active_vocabulary)
+                            overlap_ratio = overlap / len(substantive_words)
+                            if overlap < 2 or overlap_ratio < 0.40:
                                 continue
 
                         posts.append({
