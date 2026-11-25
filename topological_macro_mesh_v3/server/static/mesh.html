@@ -13,7 +13,7 @@
       width: 100vw;
       height: 100vh;
       overflow: hidden;
-      background-color: #000000;
+      background-color: #030712;
       color: #f8fafc;
       font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
@@ -21,16 +21,16 @@
       display: block;
       width: 100vw;
       height: 100vh;
-      background: #000000;
+      background-color: #030712;
       cursor: crosshair;
     }
 
     .shadcn-card {
-      background: rgba(0, 0, 0, 0.92);
+      background: rgba(3, 7, 18, 0.88);
       backdrop-filter: blur(16px);
       -webkit-backdrop-filter: blur(16px);
       border: 1px solid rgba(255, 255, 255, 0.08);
-      box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.9);
+      box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.8);
     }
     .shadcn-btn {
       background: #090d16;
@@ -483,13 +483,11 @@
 
     function ticked() {
       ctx.save();
-      // Pure Obsidian dark canvas (pitch black, zero background light bleed)
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(0, 0, width, height);
+      ctx.clearRect(0, 0, width, height);
       ctx.translate(transform.x, transform.y);
       ctx.scale(transform.k, transform.k);
 
-      // 1. Draw Links with Cohesive Leiden Community Colors (No White Sprinkle Pulses)
+      // 1. Draw Links with Cohesive Leiden Community Colors
       const nodeMap = new Map(nodes.map(n => [n.id, n]));
       for (const link of links) {
         const s = typeof link.source === 'object' ? link.source : nodeMap.get(link.source);
@@ -508,69 +506,51 @@
 
         if (isInActivePath) {
           // Highlighted causal transmission highway
-          ctx.strokeStyle = '#38bdf8';
+          ctx.strokeStyle = 'rgba(56, 189, 248, 0.95)';
           ctx.lineWidth = 1.4 / transform.k;
         } else if (isHovered) {
           // Hover connection
-          const cCol = getClusterMeta(sCluster).color;
-          ctx.strokeStyle = cCol;
-          ctx.lineWidth = 0.9 / transform.k;
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
+          ctx.lineWidth = 1.0 / transform.k;
         } else if (isSameCluster) {
           // Vibrant intra-community constellation web line
           const cCol = getClusterMeta(sCluster).color;
-          ctx.strokeStyle = cCol + '28'; // 16% opacity of the galaxy's own color
-          ctx.lineWidth = 0.65 / transform.k;
+          ctx.strokeStyle = cCol + '33'; // 20% opacity
+          ctx.lineWidth = 0.75 / transform.k;
         } else {
-          // Subtle cross-market inter-community bridge (dark obsidian hairline, zero white haze)
-          ctx.strokeStyle = 'rgba(71, 85, 105, 0.12)';
-          ctx.lineWidth = 0.4 / transform.k;
+          // Subtle cross-market inter-community bridge
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.10)';
+          ctx.lineWidth = 0.50 / transform.k;
         }
         ctx.stroke();
       }
 
-      // 2. Draw Nodes (Pure Leiden Modularity Colors - Pure Obsidian Dark Theme)
+      // 2. Draw Nodes (Pure Leiden Modularity Colors - Clean & Sharp)
       for (const node of nodes) {
         const cMeta = getClusterMeta(node.cluster);
         const isSelected = (selectedNode === node);
         const isHovered = (hoveredNode === node);
-        const z = node.z_score || 0.0;
-        const isShock = (node.isSurging && z >= 12.0);
 
-        // Concentric crisp ring for extreme outliers (Z >= 12.0σ) using community color (never white)
-        if (isShock || isSelected) {
-          ctx.beginPath();
-          ctx.arc(node.x, node.y, node.r + 3.0, 0, Math.PI * 2);
-          ctx.strokeStyle = cMeta.color;
-          ctx.lineWidth = 1.2 / transform.k;
-          ctx.stroke();
-        }
-
-        // Node Body - ALWAYS use Community Palette Color (Never blinding white)
+        // Node Body
         ctx.beginPath();
         const baseR = (isHovered || isSelected ? node.r * 1.4 : node.r);
         ctx.arc(node.x, node.y, baseR, 0, Math.PI * 2);
 
-        ctx.fillStyle = cMeta.color;
-
-        if (isSelected || isHovered) {
-          ctx.shadowColor = cMeta.color;
+        if (isSelected) {
+          ctx.fillStyle = '#ffffff';
+          ctx.shadowColor = '#ffffff';
           ctx.shadowBlur = 10;
-        } else if (z >= 4.0) {
+        } else if (isHovered) {
+          ctx.fillStyle = '#ffffff';
           ctx.shadowColor = cMeta.color;
-          ctx.shadowBlur = 6;
+          ctx.shadowBlur = 8;
         } else {
+          // Pure community galaxy color without foggy white haze
+          ctx.fillStyle = cMeta.color;
           ctx.shadowBlur = 0;
         }
 
         ctx.fill();
-
-        // Crisp ring border for hover/selection
-        if (isHovered || isSelected) {
-          ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 1.2 / transform.k;
-          ctx.stroke();
-        }
-
         ctx.shadowBlur = 0;
       }
 
