@@ -837,8 +837,8 @@
           <p class="text-white">&bull; Primary Source: <span class="text-cyan-300 font-semibold">${trigSource}</span></p>
           <p class="text-zinc-300 leading-snug">&bull; Primary Verbatim Headline: <br><span class="text-amber-300 font-mono">"${trigText}"</span></p>
           <div class="grid grid-cols-2 gap-1.5 pt-1.5 mt-1 border-t border-zinc-800 text-[10px]">
-            <p class="text-zinc-400">&bull; First Seen: <b class="text-zinc-200">${ageText}</b></p>
-            <p class="text-zinc-400">&bull; Last Active: <b class="text-emerald-400">${lastSeenText}</b></p>
+            <p class="text-zinc-400">&bull; Published: <b class="text-amber-300 font-bold">${node.published_str || node.first_seen_str}</b></p>
+            <p class="text-zinc-400">&bull; Stream Ingest: <b class="text-zinc-300">${node.stream_ingest_str || node.last_seen_str}</b></p>
           </div>
           <p class="text-zinc-400">&bull; Freshness Status: <span class="font-mono px-1 py-0.2 rounded bg-zinc-800 text-cyan-300 text-[9px] font-bold">${freshness}</span></p>
           <p class="text-emerald-400">&bull; Poisson Arrival Velocity: <b>+${zVal}σ</b></p>
@@ -924,8 +924,11 @@
             existing.trigger_source = rn.trigger_source || '';
             existing.wire_history = rn.wire_history || [];
             existing.age_seconds = rn.age_seconds || 0;
+            existing.published_str = rn.published_str || rn.first_seen_str || 'Recently';
             existing.first_seen_str = rn.first_seen_str || 'Recently';
+            existing.stream_ingest_str = rn.stream_ingest_str || 'Recently';
             existing.last_seen_str = rn.last_seen_str || 'Just now';
+            existing.freshness_regime = rn.freshness_regime || 'ACTIVE';
             existing.r = rn.r || Math.max(3.0, Math.min(8.5, 2.8 + Math.log1p(rn.degree || 1) * 0.9));
           } else {
             const angle = Math.random() * Math.PI * 2;
@@ -943,7 +946,9 @@
               trigger_source: rn.trigger_source || '',
               wire_history: rn.wire_history || [],
               age_seconds: rn.age_seconds || 0,
+              published_str: rn.published_str || rn.first_seen_str || 'Recently',
               first_seen_str: rn.first_seen_str || 'Recently',
+              stream_ingest_str: rn.stream_ingest_str || 'Recently',
               last_seen_str: rn.last_seen_str || 'Just now',
               freshness_regime: rn.freshness_regime || 'ACTIVE',
               x: (width / 2) + Math.cos(angle) * dist,

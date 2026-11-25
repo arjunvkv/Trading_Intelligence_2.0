@@ -570,6 +570,7 @@ class TopologicalManifold:
             if chosen:
                 node["trigger_text"] = chosen["title"]
                 node["trigger_source"] = chosen.get("publisher", "Sovereign Wire")
+                node["trigger_pub_ts"] = chosen.get("timestamp") or chosen.get("published_at", now)
                 assigned_nodes.add(name)
                 assigned_titles.add(chosen["title"].strip().lower())
 
@@ -590,17 +591,35 @@ class TopologicalManifold:
             first_str = f"{int(age_sec)}s ago" if age_sec < 60 else f"{round(age_sec / 60.0, 1)}m ago"
             last_str = f"{int(last_seen_sec)}s ago" if last_seen_sec < 60 else f"{round(last_seen_sec / 60.0, 1)}m ago"
 
-            if age_sec < 300:
-                regime = "HOT_BURST (<5m)"
+            # True real-world newsroom publication timestamp
+            pub_ts = node.get("trigger_pub_ts")
+            if not pub_ts and node.get("wire_history"):
+                pub_ts = node["wire_history"][0].get("timestamp")
+            if not pub_ts:
+                pub_ts = first_seen
+
+            pub_age_sec = max(0.0, round(now - pub_ts, 1))
+            if pub_age_sec < 60:
+                pub_str = f"{int(pub_age_sec)}s ago"
+            elif pub_age_sec < 3600:
+                pub_str = f"{int(pub_age_sec / 60)}m ago"
+            elif pub_age_sec < 86400:
+                pub_str = f"{round(pub_age_sec / 3600.0, 1)}h ago"
+            else:
+                pub_str = f"{round(pub_age_sec / 86400.0, 1)}d ago"
+
+            # True real-world freshness regime based on actual news publication age
+            if pub_age_sec < 1800:
+                regime = "BREAKING WIRE (<30m)"
                 age_dist["under_5m"] += 1
-            elif age_sec < 900:
-                regime = "ACTIVE (5-15m)"
+            elif pub_age_sec < 7200:
+                regime = "INTRADAY CATALYST (<2h)"
                 age_dist["5m_to_15m"] += 1
-            elif age_sec < 3600:
-                regime = "STABLE (15-60m)"
+            elif pub_age_sec < 86400:
+                regime = f"ACTIVE HORIZON ({pub_str})"
                 age_dist["15m_to_60m"] += 1
             else:
-                regime = "DECAYING (>60m)"
+                regime = f"ESTABLISHED THEATER ({pub_str})"
                 age_dist["over_60m"] += 1
 
             centrality = node.get("centrality", 0.0)
@@ -617,7 +636,7 @@ class TopologicalManifold:
             q_google = urllib.parse.quote(trigger_text[:100])
             q_x = urllib.parse.quote(name)
 
-            # Multi-wire dossier
+            # Multi-wire dossier with exact publication ages
             wh = node.get("wire_history", [])
             wire_dossier = []
             for w in wh[:6]:
@@ -625,9 +644,16 @@ class TopologicalManifold:
                 if not wt:
                     continue
                 wp = w.get("publisher", "Sovereign Wire")
-                ts = w.get("timestamp", now)
+                ts = w.get("timestamp") or w.get("published_at", now)
                 diff = max(0, int(now - ts))
-                age_label = f"{int(diff / 60)}m ago" if diff >= 60 else f"{diff}s ago"
+                if diff < 60:
+                    age_label = f"{diff}s ago"
+                elif diff < 3600:
+                    age_label = f"{int(diff / 60)}m ago"
+                elif diff < 86400:
+                    age_label = f"{round(diff / 3600.0, 1)}h ago"
+                else:
+                    age_label = f"{round(diff / 86400.0, 1)}d ago"
                 wire_dossier.append({
                     "title": wt,
                     "publisher": wp,
@@ -656,9 +682,11 @@ class TopologicalManifold:
                 "wire_history": wire_dossier,
                 "publishers": pubs,
                 "publisher_count": len(pubs),
-                "age_seconds": age_sec,
+                "age_seconds": pub_age_sec,
                 "last_seen_seconds_ago": last_seen_sec,
-                "first_seen_str": first_str,
+                "published_str": pub_str,
+                "first_seen_str": pub_str,
+                "stream_ingest_str": first_str,
                 "last_seen_str": last_str,
                 "freshness_regime": regime,
                 "verify_google": f"https://www.google.com/search?q={q_google}",

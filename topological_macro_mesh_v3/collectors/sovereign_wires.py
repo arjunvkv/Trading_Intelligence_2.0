@@ -48,14 +48,16 @@ class SovereignWiresCollector:
         self.max_age_seconds = 48.0 * 3600.0  # 48-Hour Publication Age Gate
 
     def _parse_pub_ts(self, entry: Dict[str, Any]) -> float:
-        """Extracts unix timestamp from entry published_parsed or published string."""
+        """Extracts true UTC unix timestamp from entry published_parsed, updated_parsed, or published string."""
         now = time.time()
-        if entry.get("published_parsed"):
+        parsed_time = entry.get("published_parsed") or entry.get("updated_parsed")
+        if parsed_time:
             try:
-                return float(time.mktime(entry.published_parsed))
+                import calendar
+                return float(calendar.timegm(parsed_time))
             except Exception:
                 pass
-        pub_raw = entry.get("published", "")
+        pub_raw = entry.get("published", "") or entry.get("updated", "")
         if pub_raw:
             import email.utils
             try:
