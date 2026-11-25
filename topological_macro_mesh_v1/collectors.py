@@ -54,6 +54,19 @@ class DataCollector:
         # In-memory RSS feed cache: url -> (cached_at_ts, items_list)
         self.feed_cache: Dict[str, Tuple[float, List[Dict[str, str]]]] = {}
 
+        # Round-robin sovereign country intelligence roster (1 country queried per cycle)
+        self.country_round_robin_roster = [
+            ("US Macro/Treasuries", "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-US&gl=US&ceid=US:en"),
+            ("UK London LBMA", "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-GB&gl=GB&ceid=GB:en"),
+            ("China/HK Sovereign Hub", "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-HK&gl=HK&ceid=HK:en"),
+            ("Singapore Asia FX", "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-SG&gl=SG&ceid=SG:en"),
+            ("Gulf OPEC/Energy", "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-AE&gl=AE&ceid=AE:en"),
+            ("Australia Gold Producer", "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-AU&gl=AU&ceid=AU:en"),
+            ("Japan BOJ/Yen", "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-JP&gl=JP&ceid=JP:en")
+        ]
+        self.country_roster_index = 0
+        self.country_intel_pools: Dict[str, List[Dict[str, str]]] = {}
+
     def _get_domain(self, url: str) -> str:
         try:
             return urllib.parse.urlparse(url).netloc
@@ -188,11 +201,33 @@ class DataCollector:
                 self.source_states[source_name]["error_msg"] = f"XML Parse Error: {str(e)[:40]}"
         return items
 
+    def fetch_round_robin_country_wires(self, max_items_per_country: int = 8) -> List[Dict[str, str]]:
+        """Rotates through top sovereign macro epicenters one country per cycle to eliminate 429 rate limits,
+        while maintaining the collective intelligence pool across all countries simultaneously."""
+        if not self.country_round_robin_roster:
+            return []
+            
+        label, url = self.country_round_robin_roster[self.country_roster_index]
+        self.country_roster_index = (self.country_roster_index + 1) % len(self.country_round_robin_roster)
+        
+        # Pull only this cycle's active sovereign country (1 single request per cycle)
+        new_items = self.fetch_rss_items(url, f"Sovereign: {label}", max_items=max_items_per_country, ttl_seconds=60.0)
+        if new_items:
+            self.country_intel_pools[label] = new_items
+            
+        # Return accumulated multi-country intelligence pool across all sovereign epicenters
+        combined = []
+        for country_label, items in self.country_intel_pools.items():
+            combined.extend(items)
+        return combined
+
     def fetch_sovereign_wires(self) -> List[Dict[str, str]]:
         wires = []
         wires.extend(self.fetch_rss_items("https://www.federalreserve.gov/feeds/press_all.xml", "Federal Reserve", max_items=6))
         wires.extend(self.fetch_rss_items("https://www.ecb.europa.eu/rss/press.html", "ECB", max_items=6))
         wires.extend(self.fetch_rss_items("https://www.bankofengland.co.uk/rss/news", "Bank of England", max_items=6))
+        # Multi-polar sovereign country rotation (1 country polled per cycle, entire pool maintained)
+        wires.extend(self.fetch_round_robin_country_wires(max_items_per_country=8))
         return wires
 
     def fetch_geopolitical_precursor_wires(self) -> List[Dict[str, str]]:
@@ -229,8 +264,6 @@ class DataCollector:
         
         # MarketWatch Top Stories (Official Dow Jones Feed)
         items.extend(self.fetch_rss_items("https://feeds.content.dowjones.io/public/rss/mw_topstories", "MarketWatch Wire", max_items=6))
-        # Google Business Macro (US/Global Edition, cached 120s TTL)
-        items.extend(self.fetch_rss_items("https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-US&gl=US&ceid=US:en", "Global Business Wire", max_items=8, ttl_seconds=120.0))
         return items
 
     def fetch_wikipedia_crowd_pageviews(self, dynamic_topics: List[str] = None) -> List[Dict[str, str]]:
