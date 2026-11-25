@@ -19,37 +19,36 @@ class LeadArbiter:
 
     def get_active_session_conductivity(self, recent_event_count: int = None) -> Dict[str, Any]:
         """
-        Calculates live market conductivity dynamically based on empirical event arrival flux λ(t),
-        grounded in active global session liquidity.
+        Calculates live market conductivity dynamically based on continuous harmonic diurnal
+        solar liquidity physics and empirical Poisson event arrival flux λ(t).
         """
         utc_now = datetime.now(timezone.utc)
-        hour = utc_now.hour
+        hour = utc_now.hour + (utc_now.minute / 60.0)
 
-        # Base institutional session alignment
-        if 8 <= hour < 17 and 13 <= hour < 21:
+        # Smooth continuous harmonic diurnal curve: peaks at 15:00 UTC (10:00 AM NY / 3:00 PM London overlap)
+        # S(t) = 0.62 + 0.28 * cos(2*pi*(hour - 15) / 24)
+        diurnal_conduct = 0.62 + 0.28 * math.cos(2.0 * math.pi * (hour - 15.0) / 24.0)
+        
+        # Transparent institutional session regime context
+        if 13.0 <= hour < 17.0:
             session_name = "London / NY Overlap (Peak Global Liquidity)"
-            base_conduct = 0.90
-        elif 13 <= hour < 21:
+        elif 12.0 <= hour < 21.0:
             session_name = "New York Session"
-            base_conduct = 0.82
-        elif 8 <= hour < 17:
+        elif 7.0 <= hour < 17.0:
             session_name = "London Session"
-            base_conduct = 0.80
-        elif 0 <= hour < 9:
+        elif hour < 9.0 or hour >= 23.0:
             session_name = "Asian Session (SGE / TOCOM Cash)"
-            base_conduct = 0.65
         else:
             session_name = "Off-Peak Interbank Hours"
-            base_conduct = 0.45
 
         # Empirical Poisson event flux λ(t): events per 15-minute rolling window
         if recent_event_count is not None:
             lam = max(1.0, float(recent_event_count))
             # Sigmoid dynamic scaling of flux: higher event velocity increases conductivity
             flux_modifier = 1.0 / (1.0 + math.exp(-0.12 * (lam - 12.0)))
-            conductivity = round(max(0.25, min(0.98, (base_conduct * 0.5) + (flux_modifier * 0.5))), 2)
+            conductivity = round(max(0.25, min(0.98, (diurnal_conduct * 0.60) + (flux_modifier * 0.40))), 2)
         else:
-            conductivity = base_conduct
+            conductivity = round(diurnal_conduct, 2)
 
         # Dynamic lag multiplier inversely proportional to conductivity
         lag_multiplier = round(max(0.45, min(2.5, 0.90 / max(0.20, conductivity))), 2)
@@ -58,7 +57,7 @@ class LeadArbiter:
             "session": session_name,
             "conductivity": conductivity,
             "lag_multiplier": lag_multiplier,
-            "utc_hour": hour
+            "utc_hour": round(hour, 2)
         }
 
     def compute_hawkes_ignition(

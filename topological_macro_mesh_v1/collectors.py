@@ -13,10 +13,11 @@ import urllib.parse
 import json
 import xml.etree.ElementTree as ET
 import time
+import math
 import re
 import html
 from datetime import datetime, timedelta
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional, Tuple
 
 class DataCollector:
     def __init__(self):
@@ -142,10 +143,14 @@ class DataCollector:
                     state["error_msg"] = None
                     state["fail_count"] = 0
                     state["cooldown_until"] = 0.0
+                    # Adaptive AIMD: Additive decrease of domain delay on clean 200 OK
+                    self.domain_delays[domain] = max(0.05, self.domain_delays.get(domain, self.default_domain_delay) - 0.02)
                     return data
             except urllib.error.HTTPError as e:
                 state["fail_count"] += 1
                 if e.code == 429: # Rate Limited
+                    # Adaptive AIMD: Multiplicative increase of domain delay on 429 backoff
+                    self.domain_delays[domain] = min(15.0, max(2.5, self.domain_delays.get(domain, self.default_domain_delay) * 2.0))
                     backoff = min(300, 45 * (2 ** (state["fail_count"] - 1)))
                     state["status"] = "RATE_LIMITED_429"
                     state["cooldown_until"] = time.time() + backoff
@@ -362,20 +367,72 @@ class DataCollector:
         return posts
 
 
+    def sanitize_text(self, text: str, max_len: int = 220) -> Optional[str]:
+        """
+        Pure mathematical text sanitizer using Shannon character entropy, 
+        structural debris ratio, and whole-word boundary preservation.
+        Rejects fragmented URL debris, broken markup spans, and sub-Brownian noise.
+        """
+        if not text:
+            return None
+        clean = html.unescape(text)
+        # Strip all <a ...>...</a> tags completely before removing other HTML tags
+        clean = re.sub(r'<a\b[^>]*>.*?</a>', ' ', clean, flags=re.DOTALL)
+        clean = re.sub(r'<[^>]+>', ' ', clean)
+        clean = re.sub(r'(?:https?://|www\.|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}/)\S*', ' ', clean)
+        clean = re.sub(r'@\s*[a-zA-Z0-9_]+', ' ', clean)
+        clean = re.sub(r'^(?:re|cw):\s*', '', clean, flags=re.I)
+        clean = re.sub(r'\s+', ' ', clean).strip()
+        if len(clean) < 25:
+            return None
+
+        # 1. Structural Debris / Noise Ratio: rho = (symbols + digits) / total_chars
+        # Financial reporting satisfies rho < 0.15; URL/id clutter satisfies rho > 0.18
+        syms = sum(1 for c in clean if not c.isalnum() and not c.isspace())
+        digits = sum(1 for c in clean if c.isdigit())
+        rho = (syms + digits) / len(clean)
+        if rho > 0.18:
+            return None
+
+        # 2. Shannon Character Entropy H(S)
+        from collections import Counter
+        c_counts = Counter(clean.lower())
+        total = len(clean)
+        h = -sum((cnt / total) * math.log2(cnt / total) for cnt in c_counts.values())
+        if h < 3.0 or h > 5.2:
+            return None
+
+        # 3. Whole-Word Boundary Invariant Truncation (never slices words like 'driven' into 'dri')
+        if len(clean) > max_len:
+            last_punct = max(clean[:max_len].rfind('. '), clean[:max_len].rfind('? '), clean[:max_len].rfind('! '))
+            if last_punct > max_len - 60:
+                clean = clean[:last_punct+1]
+            else:
+                last_sp = clean[:max_len].rfind(' ')
+                clean = clean[:last_sp] if last_sp > max_len - 50 else clean[:max_len]
+        return clean.strip()
+
     def fetch_federated_mastodon_squawks(self, dynamic_seeds: List[str] = None) -> List[Dict[str, str]]:
-        """Multi-instance federated open squawks across academic economics, energy, and geopolitics."""
+        """
+        Pure dynamic closed-loop crowd sensor:
+        Never polls open unvetted tags (#energy, #economics, etc.).
+        Only queries Mastodon dynamically when verified primary wires have discovered surging macro entities (I(w) >= 3.5).
+        """
+        if not dynamic_seeds:
+            return []
+        
         posts = []
-        feeds = [
-            ("https://econtwitter.net/api/v1/timelines/tag/economics?limit=6", "EconTwitter Academic Desk"),
-            ("https://mastodon.social/api/v1/timelines/tag/economics?limit=6", "Mastodon Macro Desk"),
-            ("https://mastodon.social/api/v1/timelines/tag/geopolitics?limit=6", "Mastodon Geopolitics Desk"),
-            ("https://mastodon.social/api/v1/timelines/tag/energy?limit=6", "Mastodon Energy Desk"),
-            ("https://mastodon.social/api/v1/timelines/tag/inflation?limit=6", "Mastodon Debasement Desk")
-        ]
-        if dynamic_seeds:
-            top_seed = dynamic_seeds[0].strip().lower()
-            if len(top_seed) >= 3 and top_seed.isalpha():
-                feeds.append((f"https://mastodon.social/api/v1/timelines/tag/{urllib.parse.quote(top_seed)}?limit=6", f"Mastodon {top_seed.title()} Stream"))
+        # Filter dynamic seeds to substantive alphabetic macro tokens
+        valid_seeds = [s.strip().lower() for s in dynamic_seeds if len(s.strip()) >= 3 and s.strip().isalpha()][:3]
+        if not valid_seeds:
+            return []
+
+        feeds = []
+        for seed in valid_seeds:
+            feeds.append((
+                f"https://mastodon.social/api/v1/timelines/tag/{urllib.parse.quote(seed)}?limit=6",
+                f"Mastodon {seed.title()} Stream"
+            ))
 
         for url, source_name in feeds:
             raw = self._fetch_safe(url, source_name, timeout=5)
@@ -386,39 +443,8 @@ class DataCollector:
                         content = post.get('content', '')
                         if not content:
                             continue
-                            
-                        # 1. Unescape HTML entities first so &#39; -> ', &quot; -> ", &amp; -> &
-                        clean = html.unescape(content)
-                        
-                        # 2. Strip all <a ...>...</a> tags completely before removing other HTML tags
-                        # This eliminates nested spans and link previews (e.g. <span class="invisible">https://</span>)
-                        clean = re.sub(r'<a\b[^>]*>.*?</a>', ' ', clean, flags=re.DOTALL)
-                        
-                        # 3. Strip all remaining HTML tags
-                        clean = re.sub(r'<[^>]+>', ' ', clean)
-                        
-                        # 4. Strip leftover URLs (with protocol or bare domains)
-                        clean = re.sub(r'(?:https?://|www\.|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}/)\S*', ' ', clean)
-                        
-                        # 5. Strip handles and broken mention fragments
-                        clean = re.sub(r'@\s*[a-zA-Z0-9_]+', ' ', clean)
-                        
-                        # 6. Strip reply / content-warning prefixes
-                        clean = re.sub(r'^(?:re|cw):\s*', '', clean, flags=re.I)
-                        
-                        # 7. Normalize spaces
-                        clean = re.sub(r'\s+', ' ', clean).strip()
-                        
-                        # 8. Reject promotional event and marketing spam
-                        if any(m in clean.lower() for m in ['#tradeshow', '#conference', '#expo', '#giveaway', '#airdrop', '#contest', 'sponsored']):
-                            continue
-                            
-                        # 9. Clean whole-word boundary truncation up to 220 chars (no half-cut words)
-                        if len(clean) > 220:
-                            last_sp = clean[:220].rfind(' ')
-                            clean = clean[:last_sp] if last_sp > 160 else clean[:220]
-                            
-                        if clean and len(clean) > 25:
+                        clean = self.sanitize_text(content, max_len=220)
+                        if clean and len(clean) >= 25:
                             posts.append({
                                 "source": source_name,
                                 "publisher": source_name,

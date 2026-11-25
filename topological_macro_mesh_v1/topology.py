@@ -113,15 +113,22 @@ class TopologyEngine:
 
     def _format_trigger_text(self, text: str, max_len: int = 220) -> str:
         cleaned = html.unescape(text).strip()
+        # Strip all <a ...>...</a> tags completely before removing other HTML tags
+        cleaned = re.sub(r'<a\b[^>]*>.*?</a>', ' ', cleaned, flags=re.DOTALL)
+        cleaned = re.sub(r'<[^>]+>', ' ', cleaned)
         # Strip all URLs (with protocol or bare domains)
         cleaned = re.sub(r'(?:https?://|www\.|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}/)\S*', '', cleaned)
+        cleaned = re.sub(r'@\s*[a-zA-Z0-9_]+', '', cleaned)
         # Strip reply / content-warning prefixes
         cleaned = re.sub(r'^(?:re|cw):\s*', '', cleaned, flags=re.I)
         cleaned = re.sub(r'\s+', ' ', cleaned).strip()
         if len(cleaned) <= max_len:
             return cleaned
+        last_punct = max(cleaned[:max_len].rfind('. '), cleaned[:max_len].rfind('? '), cleaned[:max_len].rfind('! '))
+        if last_punct > max_len - 60:
+            return cleaned[:last_punct+1]
         last_sp = cleaned[:max_len].rfind(' ')
-        return (cleaned[:last_sp] if last_sp > max_len - 40 else cleaned[:max_len]) + "..."
+        return (cleaned[:last_sp] if last_sp > max_len - 50 else cleaned[:max_len]) + "..."
 
     def _clean_tokens(self, text: str) -> List[str]:
         # Unescape HTML entities first
@@ -254,6 +261,14 @@ class TopologyEngine:
                 p_t = (total_mentions + 1) / (total_docs + 2)
                 surprisal = max(0.5, -math.log2(p_t))
                 info_energy = round(surprisal * max(0.0, z), 2)
+
+                # Mathematical Statistical Admission Gate:
+                # Do NOT instantiate sub-Brownian single-publisher noise (z < 1.0 and pub_count == 1 and total_mentions < 3)
+                # unless the node is already an active structural or established node in the graph.
+                is_established = t in self.nodes
+                is_statistically_significant = (z >= 1.0 or pub_count >= 2 or total_mentions >= 3 or t in INVARIANT_MACRO_CORE)
+                if not (is_established or is_statistically_significant):
+                    continue
 
                 label = publisher.split()[0] + ": " + t.capitalize()
                 
@@ -781,8 +796,8 @@ class TopologyEngine:
                 cull_nodes.add(nid)
                 continue
 
-            # Single-source leaf with degree <= 1 after 3 minutes: cull
-            if deg <= 1 and pub_count <= 1 and mentions <= 2 and (now - self.token_first_seen.get(nid, now)) > 180:
+            # Sub-Brownian noise leaf with degree <= 1 and single publisher: cull immediately if z < 1.0 or after 60s
+            if deg <= 1 and pub_count <= 1 and (data.get("z_score", 0.0) < 1.0 or mentions <= 2) and (now - self.token_first_seen.get(nid, now)) > 60:
                 cull_nodes.add(nid)
                 continue
 
