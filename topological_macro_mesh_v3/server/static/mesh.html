@@ -503,12 +503,13 @@
         clusterNodesMap.get(c).push(node);
       }
 
+      // 0. Ambient Celestial Nebulas for Primary Galaxies (Flat GPU Fill - Zero CPU Gradient Overhead)
       const topClusters = Array.from(clusterNodesMap.entries())
         .sort((a, b) => b[1].length - a[1].length)
         .slice(0, 6);
 
       for (const [cIdx, cNodes] of topClusters) {
-        if (cNodes.length < 5) continue;
+        if (cNodes.length < 8) continue;
         let sumX = 0, sumY = 0;
         for (const n of cNodes) { sumX += n.x; sumY += n.y; }
         const cx = sumX / cNodes.length;
@@ -519,17 +520,12 @@
           const d = Math.hypot(n.x - cx, n.y - cy);
           if (d > maxDist) maxDist = d;
         }
-        const radius = Math.min(300, Math.max(60, maxDist + 30));
+        const radius = Math.min(280, Math.max(60, maxDist + 25));
         const cMeta = getClusterMeta(cIdx);
-
-        const grad = ctx.createRadialGradient(cx, cy, 5, cx, cy, radius);
-        grad.addColorStop(0, cMeta.color + '14');
-        grad.addColorStop(0.5, cMeta.color + '06');
-        grad.addColorStop(1, 'rgba(0,0,0,0)');
 
         ctx.beginPath();
         ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-        ctx.fillStyle = grad;
+        ctx.fillStyle = cMeta.color + '0a'; // Soft 4% flat ambient halo
         ctx.fill();
       }
 
@@ -593,74 +589,52 @@
         ctx.stroke();
       }
 
-      // 2. Draw Nodes (Pure Leiden Modularity Colors - Clean & Ultra-Fast)
-      const highlightedNodes = [];
+      // 2. Draw Nodes (Pure Solid Constellation Colors - Batched by Palette Color for 120 FPS Pan/Zoom)
+      const colorNodePaths = new Map();
+      let activeNodeObj = null;
 
       for (const node of nodes) {
-        const cMeta = getClusterMeta(node.cluster);
         const isSelected = (selectedNode === node);
         const isHovered = (hoveredNode === node);
-        const z = node.z_score || 0.0;
-        const isShock = (node.isSurging && z >= 12.0);
 
-        if (isSelected || isHovered || isShock) {
-          highlightedNodes.push({ node, cMeta, isSelected, isHovered, isShock, z });
+        if (isSelected || isHovered) {
+          activeNodeObj = { node, isSelected, isHovered };
           continue;
         }
 
-        // Fast path for standard nodes: no shadowBlur, direct arc + fill
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, node.r, 0, Math.PI * 2);
-        ctx.fillStyle = cMeta.color;
-        ctx.fill();
+        const cMeta = getClusterMeta(node.cluster);
+        const col = cMeta.color;
+        if (!colorNodePaths.has(col)) colorNodePaths.set(col, new Path2D());
+        const p = colorNodePaths.get(col);
+        p.moveTo(node.x + node.r, node.y);
+        p.arc(node.x, node.y, node.r, 0, Math.PI * 2);
       }
 
-      // Draw highlighted/shock nodes on top with glowing aura
-      for (const item of highlightedNodes) {
-        const { node, cMeta, isSelected, isHovered, isShock } = item;
-        const baseR = (isHovered || isSelected ? node.r * 1.5 : node.r);
+      // Draw all nodes in ~8 batched GPU calls with zero shadowBlur
+      ctx.shadowBlur = 0;
+      for (const [col, p] of colorNodePaths) {
+        ctx.fillStyle = col;
+        ctx.fill(p);
+      }
 
-        // Expanding shockwave radar rings for extreme outliers (Z >= 12.0σ)
-        if (isShock) {
-          ctx.beginPath();
-          ctx.arc(node.x, node.y, node.r + 3.2, 0, Math.PI * 2);
-          ctx.strokeStyle = cMeta.color;
-          ctx.lineWidth = 1.2 / transform.k;
-          ctx.stroke();
-
-          const ringRad = node.r + 4 + ((animTime * 12) % 20);
-          const ringOpacity = Math.max(0, 0.55 - (ringRad / 30));
-          ctx.beginPath();
-          ctx.arc(node.x, node.y, ringRad, 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(255, 255, 255, ${ringOpacity})`;
-          ctx.lineWidth = 0.9 / transform.k;
-          ctx.stroke();
-        }
+      // Draw ONLY the actively hovered or selected node on top with radiant aura
+      if (activeNodeObj) {
+        const { node, isSelected } = activeNodeObj;
+        const cMeta = getClusterMeta(node.cluster);
+        const baseR = node.r * 1.5;
 
         ctx.beginPath();
         ctx.arc(node.x, node.y, baseR, 0, Math.PI * 2);
-
-        if (isSelected) {
-          ctx.fillStyle = '#ffffff';
-          ctx.shadowColor = '#ffffff';
-          ctx.shadowBlur = 14;
-        } else if (isHovered) {
-          ctx.fillStyle = '#ffffff';
-          ctx.shadowColor = cMeta.color;
-          ctx.shadowBlur = 10;
-        } else if (isShock) {
-          ctx.fillStyle = '#ffffff';
-          ctx.shadowColor = cMeta.color;
-          ctx.shadowBlur = 12;
-        }
-
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = cMeta.color;
+        ctx.shadowBlur = isSelected ? 14 : 10;
         ctx.fill();
 
-        if (isShock && !isSelected && !isHovered) {
-          ctx.strokeStyle = cMeta.color;
-          ctx.lineWidth = 1.6 / transform.k;
-          ctx.stroke();
-        }
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, baseR + 3, 0, Math.PI * 2);
+        ctx.strokeStyle = cMeta.color;
+        ctx.lineWidth = 1.5 / transform.k;
+        ctx.stroke();
 
         ctx.shadowBlur = 0;
       }
