@@ -34,7 +34,16 @@ STOPWORDS = {
     'make', 'made', 'take', 'took', 'seen', 'know', 'want', 'come', 'came',
     'first', 'last', 'next', 'back', 'still', 'look', 'looked', 'part',
     'tell', 'told', 'give', 'given', 'good', 'daily', 'today', 'weekly',
-    'monthly', 'update', 'brief', 'report', 'news', 'breaking', 'latest'
+    'monthly', 'update', 'brief', 'report', 'news', 'breaking', 'latest',
+    # Generic non-macro adjectives and filler words
+    'new', 'high', 'low', 'big', 'top', 'best', 'small', 'large', 'huge', 'major', 'recent',
+    # Common news reporting verbs that form false topological bridges
+    'holds', 'held', 'adds', 'added', 'helps', 'helped', 'joins', 'joined', 'meets', 'met',
+    'finds', 'found', 'keeps', 'kept', 'opens', 'opened', 'closes', 'closed', 'moves', 'moved',
+    'rises', 'rose', 'falls', 'fell', 'shows', 'shown', 'sees', 'sets', 'puts',
+    # Collector template and feed metadata artifacts
+    'wikipedia', 'attention', 'inquiries', 'velocity', 'article', 'articles', 'pulse', 'squawk', 'squawks',
+    'guide', 'guides', 'online', 'tools', 'website', 'service', 'services'
 }
 
 CROWD_SOURCES = {'wikimedia attention pulse', 'google crowd autocomplete', 'mastodon decentralized fediverse'}
@@ -78,7 +87,10 @@ class TopologyEngine:
         self.token_first_seen["god_xau"] = now
 
     def _clean_tokens(self, text: str) -> List[str]:
-        words = re.findall(r'[a-zA-Z]{3,}', text.lower())
+        # Strip all URLs, domain suffixes, and social handles before tokenizing
+        cleaned = re.sub(r'https?://\S+|www\.\S+|\.com|\.org|\.net|\.io|\.co|\.tech|\.de', ' ', text.lower())
+        cleaned = re.sub(r'@[a-zA-Z0-9_]+', ' ', cleaned)
+        words = re.findall(r'[a-zA-Z]{3,}', cleaned)
         return [w for w in words if w not in STOPWORDS]
 
     def _extract_ngrams(self, text: str, n_range=(2, 4)) -> List[str]:

@@ -303,7 +303,7 @@ class DataCollector:
                         curr_v = items[-1]['views']
                         growth = ((curr_v - prev_v) / max(1, prev_v)) * 100.0
                         sign = "+" if growth >= 0 else ""
-                        desc = f"Wikipedia Attention: {label} ({curr_v:,} daily inquiries, {sign}{growth:.1f}% velocity)"
+                        desc = f"Public research surge on {label} growth {sign}{growth:.1f}%"
                         posts.append({
                             "source": f"Wikimedia: {label}",
                             "publisher": "Wikipedia Public Attention",
@@ -336,7 +336,17 @@ class DataCollector:
                     data = json.loads(raw.decode('utf-8', errors='ignore'))
                     for post in data:
                         content = post.get('content', '')
-                        clean = re.sub(r'<[^>]+>', '', content).strip()
+                        # Strip HTML tags
+                        clean = re.sub(r'<[^>]+>', ' ', content).strip()
+                        # Strip all URLs and web handles
+                        clean = re.sub(r'https?://\S+|www\.\S+', ' ', clean)
+                        clean = re.sub(r'@[a-zA-Z0-9_]+', ' ', clean)
+                        clean = re.sub(r'\s+', ' ', clean).strip()
+                        
+                        # Reject promotional event and marketing spam
+                        if any(m in clean.lower() for m in ['#tradeshow', '#conference', '#expo', '#giveaway', '#airdrop', '#contest', 'sponsored']):
+                            continue
+                            
                         if clean and len(clean) > 20:
                             posts.append({
                                 "source": source_name,
