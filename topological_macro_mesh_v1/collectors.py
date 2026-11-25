@@ -87,51 +87,53 @@ class DataCollector:
         state = self.source_states[source_name]
         state["last_attempt"] = now
 
-        # Check if in cooldown
+        # Check if in active cooldown
         if now < state.get("cooldown_until", 0.0):
-            rem = int(state["cooldown_until"] - now)
-            # Source is currently cooling down
             return b""
 
         self._polite_domain_wait(domain)
 
-        try:
-            req_headers = custom_headers if custom_headers is not None else self.headers
-            req = urllib.request.Request(url, headers=req_headers)
-            with urllib.request.urlopen(req, context=self.ssl_ctx, timeout=timeout) as resp:
-                data = resp.read()
-                state["status"] = "HEALTHY"
-                state["last_success"] = time.time()
-                state["error_msg"] = None
-                state["fail_count"] = 0
-                state["cooldown_until"] = 0.0
-                return data
-        except urllib.error.HTTPError as e:
-            state["fail_count"] += 1
-            if e.code == 429: # Rate Limited!
-                backoff = min(600, 60 * (2 ** (state["fail_count"] - 1)))
-                state["status"] = "RATE_LIMITED_429"
-                state["cooldown_until"] = time.time() + backoff
-                state["error_msg"] = f"HTTP 429 Rate-Limited (Backing off {backoff}s)"
-            elif e.code == 403:
-                state["status"] = "FORBIDDEN_403"
-                state["cooldown_until"] = time.time() + 300
-                state["error_msg"] = "HTTP 403 Forbidden / Walled Garden"
-            elif e.code == 404:
-                state["status"] = "NOT_FOUND_404"
-                state["cooldown_until"] = time.time() + 300
-                state["error_msg"] = "HTTP 404 Resource Moved or Not Found"
-            else:
-                state["status"] = f"HTTP_ERROR_{e.code}"
-                state["cooldown_until"] = time.time() + 120
-                state["error_msg"] = f"HTTP Error {e.code}"
-            return b""
-        except Exception as e:
-            state["fail_count"] += 1
-            state["status"] = "CONNECTION_ERROR"
-            state["cooldown_until"] = time.time() + 60
-            state["error_msg"] = str(e)[:60]
-            return b""
+        for attempt in range(2):
+            try:
+                req_headers = custom_headers if custom_headers is not None else self.headers
+                req = urllib.request.Request(url, headers=req_headers)
+                with urllib.request.urlopen(req, context=self.ssl_ctx, timeout=timeout) as resp:
+                    data = resp.read()
+                    state["status"] = "HEALTHY"
+                    state["last_success"] = time.time()
+                    state["error_msg"] = None
+                    state["fail_count"] = 0
+                    state["cooldown_until"] = 0.0
+                    return data
+            except urllib.error.HTTPError as e:
+                state["fail_count"] += 1
+                if e.code == 429: # Rate Limited
+                    backoff = min(300, 45 * (2 ** (state["fail_count"] - 1)))
+                    state["status"] = "RATE_LIMITED_429"
+                    state["cooldown_until"] = time.time() + backoff
+                    state["error_msg"] = f"HTTP 429 Rate-Limited (Backing off {backoff}s)"
+                elif e.code == 403:
+                    state["status"] = "FORBIDDEN_403"
+                    state["cooldown_until"] = time.time() + 180
+                    state["error_msg"] = "HTTP 403 Forbidden"
+                elif e.code == 404:
+                    # Non-fatal article miss
+                    return b""
+                else:
+                    state["status"] = f"HTTP_ERROR_{e.code}"
+                    state["cooldown_until"] = time.time() + 60
+                    state["error_msg"] = f"HTTP Error {e.code}"
+                return b""
+            except Exception as e:
+                if attempt == 0:
+                    time.sleep(0.35)
+                    continue
+                state["fail_count"] += 1
+                state["status"] = "CONNECTION_ERROR"
+                state["cooldown_until"] = time.time() + 45
+                state["error_msg"] = str(e)[:60]
+                return b""
+        return b""
 
     def fetch_rss_items(self, feed_url: str, source_name: str, max_items: int = 8) -> List[Dict[str, str]]:
         raw = self._fetch_safe(feed_url, source_name)
@@ -213,20 +215,14 @@ class DataCollector:
         """Wikimedia Public Attention API: measures real-time crowd research on dynamic emerging macro nodes."""
         posts = []
         if not dynamic_topics:
-            topics = [
-                ("Gold", "Gold Bullion"),
-                ("Treasury_security", "US Treasuries"),
-                ("Petroleum", "Crude Oil"),
-                ("Central_bank", "Central Banks"),
-                ("Federal_Reserve", "Federal Reserve")
-            ]
-        else:
-            topics = []
-            for t in dynamic_topics:
-                if not t or len(t) < 3 or t.isdigit():
-                    continue
-                clean_art = t.strip().replace(" ", "_").capitalize()
-                topics.append((clean_art, t.strip().title()))
+            return []
+
+        topics = []
+        for t in dynamic_topics:
+            if not t or len(t) < 3 or t.isdigit():
+                continue
+            clean_art = t.strip().replace(" ", "_").capitalize()
+            topics.append((clean_art, t.strip().title()))
 
         end_dt = datetime.utcnow() - timedelta(days=1)
         start_dt = datetime.utcnow() - timedelta(days=3)
@@ -235,7 +231,7 @@ class DataCollector:
 
         for art, label in topics[:6]:
             url = f"https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/en.wikipedia.org/all-access/all-agents/{art}/daily/{start_str}/{end_str}"
-            raw = self._fetch_safe(url, f"Wikimedia: {label}", timeout=5, custom_headers=self.wiki_headers)
+            raw = self._fetch_safe(url, "Wikimedia Attention API", timeout=5, custom_headers=self.wiki_headers)
             if raw:
                 try:
                     data = json.loads(raw.decode('utf-8', errors='ignore'))
@@ -288,20 +284,19 @@ class DataCollector:
     def fetch_public_search_trajectories(self, dynamic_seeds: List[str] = None) -> List[Dict[str, str]]:
         """Dynamic real-world search autocomplete trajectories revealing active public inquiries."""
         posts = []
-        if dynamic_seeds:
-            search_seeds = [s for s in dynamic_seeds if len(s) >= 3 and not s.isdigit()][:4]
-            search_seeds.extend(['gold price', 'treasury yields', 'us dollar'])
-        else:
-            search_seeds = ['why is gold', 'gold price', 'treasury yields', 'us dollar', 'crude oil']
+        if not dynamic_seeds:
+            return []
+        
+        search_seeds = [s for s in dynamic_seeds if len(s) >= 3 and not s.isdigit()][:5]
 
         # Mathematical Shannon Information & Lexical Density Filter
         # Rejects lexicographical/dictionary inquiries and low-entropy noise universally without language whitelists
         LEXICOGRAPHICAL_MARKERS = {'meaning', 'definition', 'pronunciation', 'synonym', 'translate', 'translation', 'lyrics', 'cast', 'download', 'pdf'}
         FUNCTION_WORDS = {'the', 'and', 'for', 'with', 'from', 'this', 'that', 'what', 'which', 'where', 'when', 'why', 'how', 'who', 'are', 'was', 'were'}
 
-        for seed in search_seeds[:6]:
+        for seed in search_seeds:
             url = f"https://suggestqueries.google.com/complete/search?client=firefox&q={urllib.parse.quote(seed)}"
-            raw_sugg = self._fetch_safe(url, f"Crowd Suggest: {seed}", timeout=4)
+            raw_sugg = self._fetch_safe(url, "Google Crowd Autocomplete", timeout=4)
             if raw_sugg:
                 try:
                     sugg_data = json.loads(raw_sugg.decode('utf-8', errors='ignore'))
@@ -336,13 +331,25 @@ class DataCollector:
         return posts
 
     def get_health_status(self) -> Dict[str, Any]:
-        """Returns health states and active error logs across all collectors."""
+        """Returns health states and active error logs across all collectors with auto-recovery for transient network drops."""
         now = time.time()
         active_errors = []
         healthy_count = 0
-        total_count = len(self.source_states)
 
-        for name, state in self.source_states.items():
+        # Purge stale dynamic keys and auto-reset expired transient connection errors
+        for name, state in list(self.source_states.items()):
+            # If a source had a transient error and its cooldown has expired, reset to healthy if it succeeded previously
+            if state["status"] != "HEALTHY" and now >= state.get("cooldown_until", 0.0):
+                if state.get("last_success", 0) > 0:
+                    state["status"] = "HEALTHY"
+                    state["error_msg"] = None
+                    state["fail_count"] = 0
+                else:
+                    # Drop stale transient dynamic queries that were never persistent services
+                    if "Wikimedia:" in name or "Crowd Suggest:" in name:
+                        self.source_states.pop(name, None)
+                        continue
+
             is_healthy = (state["status"] == "HEALTHY")
             if is_healthy:
                 healthy_count += 1
@@ -357,7 +364,7 @@ class DataCollector:
 
         return {
             "healthy_count": healthy_count,
-            "total_count": total_count,
+            "total_count": len(self.source_states),
             "all_healthy": len(active_errors) == 0,
             "active_errors": active_errors,
             "states": list(self.source_states.values())
@@ -368,6 +375,22 @@ class DataCollector:
         sovereign = self.fetch_sovereign_wires()
         geopolitical = self.fetch_geopolitical_precursor_wires()
         market = self.fetch_intermarket_wires()
+
+        # If dynamic_seeds not supplied by topology graph, derive dynamically from freshly fetched wire headlines!
+        if not dynamic_seeds:
+            from collections import Counter
+            all_text = " ".join([item.get("text", "") for item in sovereign + geopolitical + market])
+            COMMON_FILTER = {
+                'the', 'and', 'for', 'that', 'this', 'with', 'from', 'have', 'were', 'which', 'about',
+                'news', 'today', 'daily', 'report', 'update', 'brief', 'market', 'price', 'rates', 'said',
+                'first', 'after', 'will', 'year', 'more', 'over', 'into', 'some', 'than', 'them', 'also'
+            }
+            words = [w for w in re.findall(r'[a-zA-Z]{4,}', all_text.lower()) if w not in COMMON_FILTER]
+            if words:
+                dynamic_seeds = [w for w, _ in Counter(words).most_common(5)]
+            else:
+                dynamic_seeds = ['gold', 'dollar', 'yields', 'crude']
+
         crowd = self.fetch_crowd_squawks_and_queries(dynamic_seeds=dynamic_seeds)
         health = self.get_health_status()
 
