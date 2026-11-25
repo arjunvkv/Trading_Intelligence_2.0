@@ -42,6 +42,19 @@ class MacroEntityExtractor:
         "gdp", "opec", "nato", "imf", "bis", "swift", "fomc", "vix", "tips", "brics"
     }
 
+    KNOWN_MACRO_CONCEPTS = {
+        "sanctions", "tariff", "tariffs", "inflation", "deflation", "stagflation", "recession",
+        "yield", "yields", "default", "defaults", "blockade", "ceasefire", "debasement",
+        "liquidity", "reserves", "deficit", "surplus", "embargo", "subsidies", "contagion",
+        "downgrade", "bailout", "refinancing", "inversion", "spreads", "petrodollar",
+        "clearing", "swaps", "collateral", "chokepoint", "pipeline", "uranium", "copper",
+        "lithium", "cobalt", "semiconductor", "semiconductors", "debt ceiling", "quantitative easing",
+        "quantitative tightening", "reverse repo", "foreign exchange", "capital flight", "bank run",
+        "de-dollarization", "currency war", "trade war", "export controls", "rare earths",
+        "strait of hormuz", "suez canal", "bab el-mandeb", "malacca strait", "taiwan strait",
+        "panama canal", "black sea", "red sea", "baltic dry", "treasury auction", "term premium"
+    }
+
     GRAMMAR_STOPWORDS = {
         'what', 'with', 'could', 'from', 'your', 'about', 'this', 'that', 'they',
         'have', 'been', 'said', 'will', 'more', 'when', 'some', 'than', 'into',
@@ -173,7 +186,16 @@ class MacroEntityExtractor:
                     seen.add(norm)
                     results.append({"id": norm, "name": state.title(), "label": state.title(), "category": "sovereign state", "score": 0.90})
 
-        # 3. Capitalized Multi-Word Phrases (e.g. "Federal Reserve", "Treasury Yield", "Suez Canal")
+        # 3. Critical Sovereign Macro Concepts & Phenomena
+        for concept in self.KNOWN_MACRO_CONCEPTS:
+            pattern = r'\b' + re.escape(concept) + r'\b'
+            if re.search(pattern, text, re.IGNORECASE):
+                norm = re.sub(r'[^a-z0-9]+', '_', concept).strip('_')
+                if norm not in seen:
+                    seen.add(norm)
+                    results.append({"id": norm, "name": concept.title(), "label": concept.title(), "category": "macro_concept", "score": 0.88})
+
+        # 4. Capitalized Multi-Word Phrases (e.g. "Federal Reserve", "Treasury Yield", "Suez Canal")
         for chunk in re.findall(r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b', text):
             norm = re.sub(r'[^a-z0-9]+', '_', chunk.lower()).strip('_')
             words = set(norm.split('_'))

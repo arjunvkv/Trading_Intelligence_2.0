@@ -5,12 +5,12 @@ High-performance REST API and interactive D3 canvas mesh interface.
 
 import os
 import time
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Callable
 from fastapi import FastAPI, Response
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-def create_app(manifold, radar, intermarket_collector) -> FastAPI:
+def create_app(manifold, radar, intermarket_collector, health_provider: Optional[Callable[[], Dict[str, Any]]] = None) -> FastAPI:
     app = FastAPI(title="Sovereign Macro Topological Mesh V3", version="3.0.0")
 
     app.add_middleware(
@@ -47,21 +47,24 @@ def create_app(manifold, radar, intermarket_collector) -> FastAPI:
 
     @app.get("/api/graph")
     def get_graph():
-        return manifold.get_graph_export(radar=radar)
+        health = health_provider() if health_provider else None
+        return manifold.get_graph_export(radar=radar, collector_health=health)
 
     @app.get("/api/nodes")
     def get_nodes():
-        data = manifold.get_graph_export(radar=radar)
+        health = health_provider() if health_provider else None
+        data = manifold.get_graph_export(radar=radar, collector_health=health)
         nodes = data.get("nodes", [])
         sorted_nodes = sorted(nodes, key=lambda n: (n.get("centrality", 0.0), n.get("hawkes_lambda", 0.0)), reverse=True)
         return {
             "total_nodes": len(sorted_nodes),
-            "nodes": sorted_nodes[:200]
+            "nodes": sorted_nodes[:300]
         }
 
     @app.get("/api/telemetry")
     def get_telemetry():
-        graph_data = manifold.get_graph_export(radar=radar)
+        health = health_provider() if health_provider else None
+        graph_data = manifold.get_graph_export(radar=radar, collector_health=health)
         market_telemetry = intermarket_collector.get_latest_telemetry()
         radar_telemetry = radar.get_summary_telemetry()
         
@@ -86,6 +89,7 @@ def create_app(manifold, radar, intermarket_collector) -> FastAPI:
             "communities": communities,
             "radar_clues": radar_telemetry,
             "intermarket_flows": market_telemetry,
+            "collector_health": health,
             "attention_divergence": {
                 "divergence_delta": delta,
                 "lead_quality": lead_quality,
@@ -100,11 +104,13 @@ def create_app(manifold, radar, intermarket_collector) -> FastAPI:
 
     @app.get("/api/health")
     def get_health():
+        health = health_provider() if health_provider else {}
         return {
             "status": "HEALTHY",
             "version": "3.0.0-apex",
             "nodes": len(manifold.nodes),
             "edges": len(manifold.edge_weights),
+            "collector_health": health,
             "timestamp": time.time()
         }
 

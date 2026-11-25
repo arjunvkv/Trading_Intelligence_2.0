@@ -1,7 +1,8 @@
 """
 GEOPOLITICAL WIRES COLLECTOR
 Monitors defense, kinetic conflicts, maritime chokepoint blockades,
-sanctions regimes, and strategic diplomatic bilateral summits.
+sanctions regimes, critical commodity trade controls, and bilateral diplomacy.
+Includes full collector health diagnostics.
 """
 
 import time
@@ -17,13 +18,18 @@ class GeopoliticalWiresCollector:
         {"name": "BBC World Geopolitics", "url": "https://feeds.bbci.co.uk/news/world/rss.xml"},
         {"name": "Al Jazeera Geopolitical Wires", "url": "https://www.aljazeera.com/xml/rss/all.xml"},
         {"name": "France 24 International", "url": "https://www.france24.com/en/rss"},
-        {"name": "Strategic Energy & Chokepoints", "url": "https://news.google.com/rss/search?q=%22Suez+Canal%22+OR+%22Bab+el-Mandeb%22+OR+%22OPEC+output+cut%22+OR+%22oil+embargo%22+when:1d&hl=en-US&gl=US&ceid=US:en"},
-        {"name": "Trade Sanctions & Export Controls", "url": "https://news.google.com/rss/search?q=%22export+controls%22+OR+%22OFAC+sanctions%22+OR+%22trade+tariffs%22+when:1d&hl=en-US&gl=US&ceid=US:en"}
+        {"name": "Strategic Energy & Maritime Chokepoints", "url": "https://news.google.com/rss/search?q=%22Suez+Canal%22+OR+%22Bab+el-Mandeb%22+OR+%22OPEC+output%22+OR+%22oil+embargo%22+OR+%22tanker+seizure%22+when:1d&hl=en-US&gl=US&ceid=US:en"},
+        {"name": "Trade Sanctions & Export Controls", "url": "https://news.google.com/rss/search?q=%22export+controls%22+OR+%22OFAC+sanctions%22+OR+%22trade+tariffs%22+OR+%22secondary+sanctions%22+when:1d&hl=en-US&gl=US&ceid=US:en"},
+        {"name": "Middle East Security & Military Fronts", "url": "https://news.google.com/rss/search?q=%22missile+strike%22+OR+%22naval+blockade%22+OR+%22drone+attack%22+OR+%22ceasefire+talks%22+when:1d&hl=en-US&gl=US&ceid=US:en"},
+        {"name": "Asia-Pacific & Taiwan Strait Wires", "url": "https://news.google.com/rss/search?q=%22Taiwan+Strait%22+OR+%22South+China+Sea%22+OR+%22semiconductor+sanctions%22+OR+%22rare+earths%22+when:1d&hl=en-US&gl=US&ceid=US:en"},
+        {"name": "Eastern Europe & NATO Defense", "url": "https://news.google.com/rss/search?q=%22NATO+defense%22+OR+%22Black+Sea+grain%22+OR+%22sanctions+evasion%22+OR+%22border+skirmish%22+when:1d&hl=en-US&gl=US&ceid=US:en"},
+        {"name": "Critical Minerals & Supply Disruptions", "url": "https://news.google.com/rss/search?q=%22rare+earths+export%22+OR+%22lithium+nationalization%22+OR+%22uranium+supply%22+OR+%22copper+mine+strike%22+when:1d&hl=en-US&gl=US&ceid=US:en"}
     ]
 
     def __init__(self, request_timeout: float = 6.0):
         self.request_timeout = request_timeout
         self.last_fetch: Dict[str, float] = {}
+        self.feed_states: Dict[str, Dict[str, Any]] = {}
         self.cooldown_sec = 25.0
 
     def fetch_wires(self) -> List[Dict[str, Any]]:
@@ -34,6 +40,9 @@ class GeopoliticalWiresCollector:
         for feed_meta in self.GEOPOLITICAL_FEEDS:
             name = feed_meta["name"]
             url = feed_meta["url"]
+
+            if name not in self.feed_states:
+                self.feed_states[name] = {"source": name, "status": "HEALTHY", "last_success": 0.0, "error_msg": None}
 
             if now - self.last_fetch.get(name, 0.0) < self.cooldown_sec:
                 continue
@@ -48,13 +57,13 @@ class GeopoliticalWiresCollector:
                     raw_data = resp.read()
 
                 parsed = feedparser.parse(raw_data)
-                for entry in parsed.entries[:5]:
+                for entry in parsed.entries[:14]:
                     title = entry.get("title", "").strip()
                     summary = entry.get("summary", "").strip()
                     link = entry.get("link", url)
                     published = entry.get("published", "")
 
-                    if title and len(title) > 12:
+                    if title and len(title) > 10:
                         articles.append({
                             "title": title,
                             "summary": summary,
@@ -65,7 +74,21 @@ class GeopoliticalWiresCollector:
                             "timestamp": now
                         })
                 self.last_fetch[name] = now
-            except Exception:
+                self.feed_states[name]["status"] = "HEALTHY"
+                self.feed_states[name]["last_success"] = now
+                self.feed_states[name]["error_msg"] = None
+            except Exception as e:
+                self.feed_states[name]["status"] = "CONNECTION_ERROR"
+                self.feed_states[name]["error_msg"] = str(e)[:50]
                 continue
 
         return articles
+
+    def get_health_states(self) -> Dict[str, Any]:
+        """Provides status of geopolitical feeds for the UI diagnostics flyout."""
+        healthy_count = sum(1 for s in self.feed_states.values() if s["status"] == "HEALTHY")
+        return {
+            "healthy_count": healthy_count,
+            "total_count": len(self.GEOPOLITICAL_FEEDS),
+            "states": list(self.feed_states.values())
+        }

@@ -237,7 +237,7 @@ class TopologicalManifold:
             min_flow_threshold=0.10
         )
 
-    def get_graph_export(self, radar=None) -> Dict[str, Any]:
+    def get_graph_export(self, radar=None, collector_health: Dict[str, Any] = None) -> Dict[str, Any]:
         """
         Exports the entire manifold in 100% D3 UI-compliant JSON structure.
         """
@@ -343,31 +343,34 @@ class TopologicalManifold:
         # Format Precursor Clues for UI Radar
         radar_clues = []
         if radar:
-            active_clues = radar.active_clues.values()
-            for c in active_clues:
-                phrase = c.get("title", "")
-                nodes_in_clue = c.get("participating_nodes", [])
-                primary_node = nodes_in_clue[0] if nodes_in_clue else phrase
-                pubs = list(self.entity_publishers.get(primary_node, ["Sovereign Wire"]))
-                stage = c.get("stage", "WHISPER")
-                stage_str = f"STAGE 3: BREAKOUT TRANSMISSION" if stage == "BREAKOUT" else (f"STAGE 2: CLUSTER FORMING" if stage == "FORMING" else "STAGE 1: GROUND WHISPER")
-                hawkes_b = "IGNITION POINT (Self-Exciting)" if stage in ["FORMING", "BREAKOUT"] else "EQUILIBRIUM"
-                lead_b = "ASYMMETRIC LEAD (Alpha Front-Run)" if stage == "BREAKOUT" else "ASYMMETRIC LEAD"
-                
-                radar_clues.append({
-                    "phrase": primary_node,
-                    "title": phrase,
-                    "stage": stage_str,
-                    "hawkes_badge": hawkes_b,
-                    "lead_badge": lead_b,
-                    "maturation_minutes": max(1, int((now - c.get("first_seen", now)) / 60.0)),
-                    "publisher_count": len(pubs),
-                    "publishers": pubs,
-                    "primary_publisher": pubs[0] if pubs else "Sovereign Wire",
-                    "sample_headline": c.get("description", phrase),
-                    "z_score": 2.5 if stage == "BREAKOUT" else 1.2,
-                    "google_url": f"https://www.google.com/search?q={urllib.parse.quote(phrase)}"
-                })
+            if hasattr(radar, "get_ui_clues"):
+                radar_clues = radar.get_ui_clues(self.entity_publishers)
+            else:
+                active_clues = radar.active_clues.values()
+                for c in active_clues:
+                    phrase = c.get("title", "")
+                    nodes_in_clue = c.get("participating_nodes", [])
+                    primary_node = nodes_in_clue[0] if nodes_in_clue else phrase
+                    pubs = list(self.entity_publishers.get(primary_node, ["Sovereign Wire"]))
+                    stage = c.get("stage", "WHISPER")
+                    stage_str = f"STAGE 3: BREAKOUT TRANSMISSION" if stage == "BREAKOUT" else (f"STAGE 2: CLUSTER FORMING" if stage == "FORMING" else "STAGE 1: GROUND WHISPER")
+                    hawkes_b = "IGNITION POINT (Self-Exciting)" if stage in ["FORMING", "BREAKOUT"] else "EQUILIBRIUM"
+                    lead_b = "ASYMMETRIC LEAD (Alpha Front-Run)" if stage == "BREAKOUT" else "ASYMMETRIC LEAD"
+                    
+                    radar_clues.append({
+                        "phrase": primary_node,
+                        "title": phrase,
+                        "stage": stage_str,
+                        "hawkes_badge": hawkes_b,
+                        "lead_badge": lead_b,
+                        "maturation_minutes": max(1, int((now - c.get("first_seen", now)) / 60.0)),
+                        "publisher_count": len(pubs),
+                        "publishers": pubs,
+                        "primary_publisher": pubs[0] if pubs else "Sovereign Wire",
+                        "sample_headline": c.get("description", phrase),
+                        "z_score": 2.5 if stage == "BREAKOUT" else 1.2,
+                        "google_url": f"https://www.google.com/search?q={urllib.parse.quote(phrase)}"
+                    })
 
         # Primary Driver Discovery
         surging_nodes = [n for n in export_nodes if n.get("is_surging")]
@@ -395,7 +398,7 @@ class TopologicalManifold:
                 "verify_x": "https://x.com/search?q=macroeconomics"
             }
 
-        return {
+        res = {
             "timestamp": now,
             "nodes_count": len(export_nodes),
             "links_count": len(export_links),
@@ -403,10 +406,13 @@ class TopologicalManifold:
             "cascades_count": len(self.active_cascades),
             "cascades": self.active_cascades,
             "communities": export_communities,
-            "emerging_constellations": radar_clues[:6],
-            "precursor_clues": radar_clues[:6],
+            "emerging_constellations": radar_clues[:12],
+            "precursor_clues": radar_clues[:12],
             "primary_driver": primary_driver,
             "age_distribution": age_dist,
             "nodes": export_nodes,
             "links": export_links
         }
+        if collector_health:
+            res["collector_health"] = collector_health
+        return res
