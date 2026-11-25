@@ -21,55 +21,6 @@ try:
 except ImportError:
     from topological_macro_mesh_v1.lead_arbiter import LeadArbiter
 
-STOPWORDS = {
-    'the', 'and', 'for', 'that', 'this', 'with', 'from', 'have', 'were', 
-    'which', 'about', 'https', 'http', 'com', 'are', 'was', 'been', 
-    'they', 'their', 'what', 'when', 'where', 'who', 'why', 'how', 'will', 'more',
-    'into', 'some', 'than', 'them', 'then', 'also', 'other', 'over', 'per', 'via',
-    'not', 'his', 'her', 'its', 'our', 'your', 'just', 'has', 'had', 'amid', 'upon',
-    'all', 'any', 'one', 'out', 'can', 'could', 'would', 'should', 'but', 'yet', 'nor', 'now', 'may', 'might', 'must',
-    'having', 'most', 'much', 'does', 'did', 'done', 'said', 'says',
-    'like', 'very', 'well', 'many', 'even', 'such', 'year', 'years',
-    'time', 'before', 'after', 'down', 'only', 'while', 'under',
-    'between', 'during', 'both', 'each', 'those', 'these', 'whose',
-    'being', 'through', 'because', 'against', 'since', 'until', 'without',
-    'make', 'made', 'take', 'took', 'seen', 'know', 'want', 'come', 'came',
-    'first', 'last', 'next', 'back', 'still', 'look', 'looked', 'part',
-    'tell', 'told', 'give', 'given', 'good', 'daily', 'today', 'weekly',
-    'monthly', 'update', 'brief', 'report', 'news', 'breaking', 'latest',
-    # Generic non-macro adjectives and filler words
-    'new', 'high', 'low', 'big', 'top', 'best', 'small', 'large', 'huge', 'major', 'recent',
-    # Common news reporting verbs that form false topological bridges
-    'holds', 'held', 'adds', 'added', 'helps', 'helped', 'joins', 'joined', 'meets', 'met',
-    'finds', 'found', 'keeps', 'kept', 'opens', 'opened', 'closes', 'closed', 'moves', 'moved',
-    'rises', 'rose', 'falls', 'fell', 'shows', 'shown', 'sees', 'sets', 'puts',
-    # Collector template and feed metadata artifacts
-    'wikipedia', 'attention', 'inquiries', 'velocity', 'article', 'articles', 'pulse', 'squawk', 'squawks',
-    'guide', 'guides', 'online', 'tools', 'website', 'service', 'services',
-    # Numeric words and quantity counters
-    'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'hundred', 'thousand',
-    # Unescaped HTML entities artifacts
-    'quot', 'apos', 'amp', 'nbsp', 'lt', 'gt'
-}
-
-# Recognized 3-letter macro acronyms, sovereign entities, and commodities
-MACRO_3LETTER_ALLOWLIST = {
-    'fed', 'ecb', 'boj', 'gdp', 'cpi', 'pmi', 'sec', 'oil', 'gas',
-    'tax', 'imf', 'wto', 'boc', 'pce', 'ism', 'ppi', 'xau', 'dxy',
-    'ust', 'war', 'aid', 'law', 'fx', 'tar'
-}
-
-# Invariant Macro Core Tokens: Protected from statistical stopword muting under any circumstance
-INVARIANT_MACRO_CORE = {
-    'fed', 'rates', 'rate', 'dollar', 'gold', 'yield', 'yields', 'inflation',
-    'treasury', 'treasuries', 'debt', 'bank', 'banks', 'central', 'oil', 'crude',
-    'war', 'sanctions', 'bonds', 'reserve', 'reserves', 'deficit', 'liquidity',
-    'tariff', 'tariffs', 'bullion', 'xau', 'dxy', 'tips', 'recession', 'debasement',
-    'comex', 'lbma', 'vault', 'inventory', 'refinery', 'premium'
-}
-
-CROWD_SOURCES = {'wikimedia attention pulse', 'google crowd autocomplete', 'mastodon decentralized fediverse'}
-
 class TopologyEngine:
     def __init__(self, half_life_seconds: float = 7200.0): # 2-hour half life for kinetic shocks
         self.half_life = half_life_seconds
@@ -86,6 +37,8 @@ class TopologyEngine:
         self.token_mentions = defaultdict(int)
         self.token_first_seen = {}
         self.token_trigger = {}
+        self.token_is_wire = defaultdict(bool)
+        self.token_is_crowd = defaultdict(bool)
         
         # N-Gram Phrase Tracking with Publisher Provenance & Inverse Corpus Frequency (ICF)
         self.phrase_history = defaultdict(list)
@@ -93,23 +46,16 @@ class TopologyEngine:
         self.phrase_sources = defaultdict(set)
         self.phrase_contexts = defaultdict(list)
         self.phrase_doc_counts = defaultdict(int) # Background document frequency
+        self.phrase_is_wire = defaultdict(bool)
+        self.phrase_is_crowd = defaultdict(bool)
+
         self.word_doc_frequencies = defaultdict(int) # Empirical Zipf's law document frequency
+        self.pair_co_occurrences = defaultdict(int) # Universal Bouma NPMI pairwise co-occurrences
         self.total_docs_seen = 0
-        self.gold_docs_seen = 0
-        self.gold_co_occurrences = defaultdict(int)
         self.seen_items = {} # Cache (publisher, text) -> last_seen_ts to prevent duplicate poll timestamp spam
         
         self.edges = {}
         self.nodes = {}
-
-        # Universal Gold Spot Anchor
-        now = time.time()
-        self.nodes["god_xau"] = {
-            "cluster": 0, "label": "XAUUSD SPOT", "last_seen": now, "z_score": 0.0,
-            "is_god": True, "r": 8.0, "trigger_text": "Universal Spot Gold Pricing Anchor",
-            "trigger_source": "Interbank Cash"
-        }
-        self.token_first_seen["god_xau"] = now
 
     def _format_trigger_text(self, text: str, max_len: int = 220) -> str:
         cleaned = html.unescape(text).strip()
@@ -133,8 +79,11 @@ class TopologyEngine:
     def _clean_tokens(self, text: str) -> List[str]:
         # Unescape HTML entities first
         text = html.unescape(text)
-        # Track uppercase 3-letter acronyms from raw text before lowercasing (e.g. 'CEO', 'TSA', 'BMW', 'ICC', 'WHO', 'COP', 'LNG')
-        uppercase_3_acronyms = set(re.findall(r'\b[A-Z]{3}\b', text))
+        # Strip all HTML tags and remnant encoded character entities
+        text = re.sub(r'<[^>]+>', ' ', text)
+        text = re.sub(r'&[a-zA-Z0-9#]+;', ' ', text)
+        # Track uppercase 3-to-4 letter acronyms from raw text before lowercasing (e.g. 'FED', 'ECB', 'BOJ', 'CPI', 'GDP', 'PBOC', 'XAU', 'DXY')
+        uppercase_acronyms = set(re.findall(r'\b[A-Z]{3,4}\b', text))
 
         # Unicode Diacritic Normalization (e.g. Glapiński -> Glapinski, Erdoğan -> Erdogan, Złoty -> Zloty)
         replacements = {'\u0142': 'l', '\u0141': 'L', '\u00f8': 'o', '\u00d8': 'O', '\u00e6': 'ae', '\u00c6': 'AE', '\u00df': 'ss'}
@@ -150,18 +99,17 @@ class TopologyEngine:
         filtered = []
         total_docs = max(10, self.total_docs_seen)
         for w in words:
-            if w in STOPWORDS:
+            # Dynamic Zipfian Dispersion Particle Filter:
+            # If a token's document frequency across all seen articles exceeds 32% (after 20 articles),
+            # it is dynamically classified as a structural grammatical particle or ubiquitous noise and muted.
+            if self.total_docs_seen >= 20 and (self.word_doc_frequencies.get(w, 0) / total_docs) >= 0.32:
                 continue
-            # Dynamic Zipf's Law Statistical Particle Filter (Threshold: > 28% of all documents)
-            # EXEMPTION: Invariant sovereign macro core tokens are NEVER muted as stopwords!
-            if w not in INVARIANT_MACRO_CORE:
-                if self.total_docs_seen >= 30 and (self.word_doc_frequencies.get(w, 0) / total_docs) >= 0.28:
-                    continue
+            
             if len(w) >= 4:
                 filtered.append(w)
             elif len(w) == 3:
-                # Keep recognized macro commodities/terms, raw uppercase acronyms, or multi-publisher verified tokens
-                if w in MACRO_3LETTER_ALLOWLIST or w in INVARIANT_MACRO_CORE or w.upper() in uppercase_3_acronyms or len(self.token_publishers.get(w, [])) >= 2:
+                # 3-letter tokens: admit if uppercase in source (acronym) or multi-publisher corroborated
+                if w.upper() in uppercase_acronyms or len(self.token_publishers.get(w, [])) >= 2:
                     filtered.append(w)
         return filtered
 
@@ -206,7 +154,7 @@ class TopologyEngine:
             item_arrival_ts = pub_ts if (now - pub_ts) < 86400 else now
 
             # 1. Multi-Word Phrase Tracking with Provenance & ICF
-            is_crowd_doc = is_crowd or any(k in source.lower() for k in ['crowd', 'search', 'wikimedia', 'mastodon'])
+            is_crowd_doc = is_crowd or item.get("is_crowd", False)
             seen_phrases_in_doc = set()
             for phrase in ngrams[:8]:
                 if is_new_item:
@@ -217,8 +165,10 @@ class TopologyEngine:
                 self.phrase_publishers[phrase].add(publisher)
                 self.phrase_sources[phrase].add(source)
                 if is_crowd_doc:
+                    self.phrase_is_crowd[phrase] = True
                     self.crowd_phrases.add(phrase)
                 else:
+                    self.phrase_is_wire[phrase] = True
                     self.wire_phrases.add(phrase)
                 if len(self.phrase_contexts[phrase]) < 4:
                     self.phrase_contexts[phrase].append((text[:130], publisher))
@@ -233,6 +183,10 @@ class TopologyEngine:
                     self.token_first_seen[t] = item_arrival_ts
                 self.token_publishers[t].add(publisher)
                 self.token_sources[t].add(source)
+                if is_crowd_doc:
+                    self.token_is_crowd[t] = True
+                else:
+                    self.token_is_wire[t] = True
                 
                 clean_trig = self._format_trigger_text(text, 220)
 
@@ -284,124 +238,57 @@ class TopologyEngine:
                     "trigger_source": publisher if is_new_item else self.nodes.get(t, {}).get("trigger_source", publisher)
                 }
 
-            # 3. Form Co-Occurrence Edges (Empirical Association)
-            for i in range(min(4, len(tokens))):
-                for j in range(i + 1, min(5, len(tokens))):
+            # 3. Universal Co-Occurrence NPMI Edges (Natural Mutual Information Network)
+            # Solves PMI rare-word bias using Bouma Normalized PMI & Pantel-Lin discount
+            # Forms edges between all genuine co-occurring entities organically without forcing connections
+            for i in range(min(5, len(tokens))):
+                for j in range(i + 1, min(6, len(tokens))):
                     t1, t2 = sorted([tokens[i], tokens[j]])
                     key = (t1, t2)
-                    if key not in self.edges:
-                        self.edges[key] = {"weight": 0.6, "last_seen": now, "te": 0.35}
-                    elif is_new_item:
-                        self.edges[key]["weight"] = min(3.0, self.edges[key]["weight"] + 0.3)
-                        self.edges[key]["last_seen"] = now
-
-            # 4. Empirical Natural Gold Linkage (Discounted Normalized PMI - DNPMI)
-            # Solves the classic PMI rare-word bias (Pantel & Lin, Bouma) using statistical discounts
-            # and requiring a 2-newsroom quorum to prevent single-source exploration PR noise.
-            is_gold_doc = ("gold" in tokens or "Gold" in source or "god_xau" in tokens)
-            if is_gold_doc:
-                if is_new_item:
-                    self.gold_docs_seen += 1
-                
-                total_docs = max(10, self.total_docs_seen)
-                p_gold = max(1, self.gold_docs_seen) / total_docs
-
-                # Form statistical linkage with verified high-salience tokens in the document
-                for tok in tokens[:4]:
-                    if tok == "god_xau" or len(tok) < 3:
-                        continue
                     if is_new_item:
-                        self.gold_co_occurrences[tok] += 1
+                        self.pair_co_occurrences[key] += 1
                     
-                    co_count = self.gold_co_occurrences[tok]
-                    tok_mentions = max(1, self.token_mentions.get(tok, 1))
-                    pub_count = len(self.token_publishers.get(tok, []))
-
-                    # Statistical Quorum: Single-mention, single-source tokens cannot form direct sovereign 1-hop edges to Gold
-                    if co_count < 2 or pub_count < 2:
-                        continue
+                    co_count = self.pair_co_occurrences[key]
+                    t1_m = max(1, self.token_mentions.get(t1, 1))
+                    t2_m = max(1, self.token_mentions.get(t2, 1))
+                    total_docs = max(10, self.total_docs_seen)
                     
-                    p_tok = tok_mentions / total_docs
+                    p1 = t1_m / total_docs
+                    p2 = t2_m / total_docs
                     p_joint = co_count / total_docs
                     
-                    # 1. Pointwise Mutual Information: PMI(x, y) = ln( P(x, y) / (P(x) * P(y)) )
-                    raw_pmi = math.log(max(1e-6, p_joint / (p_tok * p_gold)))
-                    
-                    # 2. Bouma Normalized PMI: NPMI = PMI / (-ln(P(x, y))), mapped strictly to [-1, 1]
+                    # Pointwise Mutual Information & Bouma Normalization
+                    raw_pmi = math.log(max(1e-6, p_joint / (p1 * p2)))
                     self_info = -math.log(max(1e-6, p_joint))
                     npmi = max(-1.0, min(1.0, raw_pmi / max(1e-4, self_info)))
                     
-                    # 3. Empirical Evidence Discount (Pantel & Lin): Heavily discounts small sample counts
-                    discount = co_count / (co_count + 1.5)
+                    # Empirical Evidence Discount
+                    discount = co_count / (co_count + 1.2)
                     dnpmi = max(0.0, npmi * discount)
                     
-                    # Only statistically verified associations form direct 1-hop sovereign transmission edges
-                    if dnpmi < 0.20:
-                        continue
-                    
-                    dynamic_weight = round(max(0.6, min(3.0, 0.7 + (dnpmi * 2.3))), 2)
+                    dynamic_weight = round(max(0.5, min(3.0, 0.6 + (dnpmi * 2.4))), 2)
                     dynamic_te = round(max(0.30, min(0.95, 0.35 + (dnpmi * 0.60))), 2)
                     
-                    edge_key = tuple(sorted([tok, "god_xau"]))
-                    if edge_key not in self.edges:
-                        self.edges[edge_key] = {"weight": dynamic_weight, "last_seen": now, "te": dynamic_te}
+                    if key not in self.edges:
+                        self.edges[key] = {"weight": dynamic_weight, "last_seen": now, "te": dynamic_te}
                     elif is_new_item:
-                        self.edges[edge_key]["weight"] = dynamic_weight
-                        self.edges[edge_key]["te"] = dynamic_te
-                        self.edges[edge_key]["last_seen"] = now
+                        self.edges[key]["weight"] = dynamic_weight
+                        self.edges[key]["te"] = dynamic_te
+                        self.edges[key]["last_seen"] = now
 
-            # 5. Graph Topological Diffusion (2-Hop Resource Allocation Transmission to god_xau)
-            # Pure mathematical linkage: allows non-kinetic hybrid warfare and sovereign reserve
-            # moves to link to Gold via network bridge topology, even when 'gold' is not literally in the text.
-            if not is_gold_doc and is_new_item:
-                # Find established 1-hop macro bridges to god_xau (weight >= 0.70)
-                macro_bridges = []
-                for (src, tgt), ed in self.edges.items():
-                    if ed.get("weight", 0) >= 0.70:
-                        if src == "god_xau" and tgt != "god_xau":
-                            macro_bridges.append((tgt, ed["weight"]))
-                        elif tgt == "god_xau" and src != "god_xau":
-                            macro_bridges.append((src, ed["weight"]))
-
-                if macro_bridges:
-                    for tok in tokens[:4]:
-                        if tok == "god_xau" or len(tok) < 3:
-                            continue
-                        tok_pubs = len(self.token_publishers.get(tok, []))
-                        tok_z = self.nodes.get(tok, {}).get("z_score", 0.0)
-                        
-                        # Only substantive tokens with multi-publisher confirmation or elevated burst velocity
-                        if tok_pubs < 2 and tok_z < 2.0:
-                            continue
-
-                        # Calculate 2-hop Resource Allocation (RA) diffusion score across common macro bridges
-                        ra_score = 0.0
-                        for bridge, bridge_w in macro_bridges:
-                            edge_tb = tuple(sorted([tok, bridge]))
-                            if edge_tb in self.edges:
-                                w_tb = self.edges[edge_tb].get("weight", 0.5)
-                                deg_b = max(2, len([e for e in self.edges if bridge in e]))
-                                ra_score += (w_tb * bridge_w) / math.log(1.0 + deg_b)
-
-                        # Dynamic mathematical threshold for topological transmission
-                        ra_threshold = max(0.18, min(0.38, (sum(bw for _, bw in macro_bridges) / max(1, len(macro_bridges))) * 0.28))
-                        if ra_score >= ra_threshold:
-                            diffuse_w = round(min(2.5, 0.65 + (ra_score * 0.45)), 2)
-                            diffuse_te = round(min(0.85, 0.35 + (ra_score * 0.30)), 2)
-                            edge_key = tuple(sorted([tok, "god_xau"]))
-                            if edge_key not in self.edges:
-                                self.edges[edge_key] = {"weight": diffuse_w, "last_seen": now, "te": diffuse_te}
-                            else:
-                                self.edges[edge_key]["weight"] = max(self.edges[edge_key]["weight"], diffuse_w)
-                                self.edges[edge_key]["last_seen"] = now
-
-    def find_shortest_causal_path(self, start_token: str, target: str = "god_xau") -> Tuple[List[str], float]:
+    def find_shortest_causal_path(self, start_token: str, target: str = None) -> Tuple[List[str], float]:
         """
         Dijkstra's Algorithm over Transfer Entropy / Edge Weights to find the true
-        mathematical transmission pipeline from an emerging entity to Gold (XAUUSD).
+        mathematical transmission pipeline from an emerging entity to the target asset.
         """
-        if start_token not in self.nodes or target not in self.nodes:
-            return ([start_token, target], 0.5)
+        if target is None:
+            target = "gold" if "gold" in self.nodes else ("xau" if "xau" in self.nodes else None)
+
+        if not target or target not in self.nodes or start_token not in self.nodes:
+            return ([start_token], 0.0)
+
+        if start_token == target:
+            return ([start_token], 1.0)
 
         adj = defaultdict(dict)
         for (src, tgt), ed in self.edges.items():
@@ -426,7 +313,7 @@ class TopologyEngine:
                 if nbr not in visited and len(path) < 6: # max 5 hops
                     heapq.heappush(pq, (cost + edge_cost, nbr, path + [nbr]))
 
-        return ([start_token, "god_xau"], 0.3)
+        return ([start_token], 0.0)
 
     def _discover_communities(self) -> Tuple[Dict[int, List[str]], Dict[int, Dict[str, Any]]]:
         """
@@ -448,7 +335,7 @@ class TopologyEngine:
         sorted_nodes = sorted(self.nodes.keys(), key=lambda n: len(adj[n]), reverse=True)
 
         for nid in sorted_nodes:
-            if nid not in visited and not self.nodes[nid].get("is_god"):
+            if nid not in visited:
                 members = []
                 queue = deque([nid])
                 visited.add(nid)
@@ -456,7 +343,7 @@ class TopologyEngine:
                     curr = queue.popleft()
                     members.append(curr)
                     for nbr in adj[curr]:
-                        if nbr not in visited and not self.nodes[nbr].get("is_god"):
+                        if nbr not in visited:
                             visited.add(nbr)
                             queue.append(nbr)
                 if len(members) >= 2:
@@ -474,7 +361,7 @@ class TopologyEngine:
 
                     ranked_tokens = sorted(members, key=score_token, reverse=True)
                     top_t = [t.title() for t in ranked_tokens[:2]]
-                    name = " & ".join(top_t) + " Cluster" if len(top_t) >= 2 else (top_t[0] + " Cluster" if top_t else f"Cluster {c_idx+1}")
+                    name = " & ".join(top_t) + " Constellation" if len(top_t) >= 2 else (top_t[0] + " Constellation" if top_t else f"Constellation {c_idx+1}")
                     
                     community_meta[c_idx] = {
                         "id": c_idx,
@@ -495,7 +382,7 @@ class TopologyEngine:
         candidates = []
         total_docs = max(10, self.total_docs_seen)
         for nid, data in self.nodes.items():
-            if data.get("is_god") or not isinstance(nid, str) or len(nid) < 3 or nid.isdigit():
+            if not isinstance(nid, str) or len(nid) < 3 or nid.isdigit():
                 continue
             z = data.get("z_score", 0.0)
             pubs = len(self.token_publishers.get(nid, set()))
@@ -558,29 +445,28 @@ class TopologyEngine:
             google_url = f"https://www.google.com/search?q={q_encoded}"
             x_url = f"https://x.com/search?q={q_encoded}&f=live"
 
-            # Distinguish real journalistic newsrooms from crowd queries
-            CROWD_SOURCES = {'wikimedia attention pulse', 'google crowd autocomplete', 'mastodon decentralized fediverse'}
-            real_newsrooms = [p for p in publishers if p.lower() not in CROWD_SOURCES and 'crowd' not in p.lower() and 'search' not in p.lower() and 'wiki' not in p.lower()]
-            crowd_channels = [p for p in publishers if p.lower() in CROWD_SOURCES or 'crowd' in p.lower() or 'search' in p.lower() or 'wiki' in p.lower()]
-            is_pure_crowd = (len(real_newsrooms) == 0 and len(crowd_channels) > 0)
+            # Distinguish real journalistic newsrooms from crowd queries via provenance
+            is_pure_crowd = (self.phrase_is_crowd.get(phrase, False) and not self.phrase_is_wire.get(phrase, False))
+            real_newsrooms = [p for p in publishers if 'crowd' not in p.lower() and 'search' not in p.lower() and 'wiki' not in p.lower() and 'mastodon' not in p.lower()]
+            crowd_channels = [p for p in publishers if 'crowd' in p.lower() or 'search' in p.lower() or 'wiki' in p.lower() or 'mastodon' in p.lower()]
 
             if is_pure_crowd:
                 prov_label = f"{len(crowd_channels)} Crowd Channels (0 Newsrooms)"
             else:
                 prov_label = f"{len(real_newsrooms)} Newsrooms"
 
-            # Representative Centroid Headline (Killing the [0] arbitrary index bug)
+            # Representative Centroid Headline (Information-Dense Context Selection)
             contexts = self.phrase_contexts.get(phrase, [])
+            total_docs = max(20, self.total_docs_seen)
             if contexts:
                 def score_context(ctx):
                     hl, pub = ctx
                     hl_lower = hl.lower()
                     pub_lower = pub.lower()
-                    is_real_pub = pub_lower not in CROWD_SOURCES and 'crowd' not in pub_lower and 'search' not in pub_lower and 'wiki' not in pub_lower
+                    is_real_pub = 'crowd' not in pub_lower and 'search' not in pub_lower and 'wiki' not in pub_lower and 'mastodon' not in pub_lower
                     
-                    # Mathematical Information Density:
-                    tokens = [w for w in re.findall(r'[a-zA-Z]{3,}', hl_lower) if w not in STOPWORDS]
-                    total_docs = max(20, self.total_docs_seen)
+                    # Mathematical Information Density (Zipf-filtered):
+                    tokens = [w for w in re.findall(r'[a-zA-Z]{3,}', hl_lower) if (self.word_doc_frequencies.get(w, 0) / total_docs) < 0.32]
                     salience = sum(math.log(1.0 + (total_docs / max(1, self.token_mentions.get(w, 1)))) for w in tokens)
                     max_z = max([self.nodes.get(w, {}).get("z_score", 0.0) for w in tokens] or [0.0])
                     
@@ -592,22 +478,20 @@ class TopologyEngine:
                 context_headline, primary_pub = (phrase, "Wire")
 
             # Shannon Information Surprise / Inverse Corpus Frequency (ICF)
-            # Ubiquitous background entities ("federal reserve", "united states") have high doc_freq (~0.3-0.7 ICF).
-            # Specific precursor clues appearing abruptly have low doc_freq (~2.5-4.5 ICF).
             total_corpus_docs = max(20, self.total_docs_seen)
             doc_freq = self.phrase_doc_counts.get(phrase, 1)
             icf = round(math.log(1.0 + (total_corpus_docs / max(1, doc_freq))), 2)
 
             # 1. Hawkes Ignition Point Process (Self-Exciting Acceleration)
-            hawkes = self.lead_arbiter.compute_hawkes_ignition(timestamps, list(publishers), now=now)
+            hawkes = self.lead_arbiter.compute_hawkes_ignition(timestamps, list(publishers), is_pure_crowd=is_pure_crowd, now=now)
 
             # 2. Sovereign Causal Transmission Pathway (derived from Dijkstra living graph path)
             p_tokens = phrase.split()
             cand_clusters = [self.nodes[t]["cluster"] for t in p_tokens if t in self.nodes]
             cand_cluster = max(set(cand_clusters), key=cand_clusters.count) if cand_clusters else 0
             
-            # Mathematical Dijkstra transmission path through edge weights to Gold
-            causal_path, path_weight = self.find_shortest_causal_path(p_tokens[0] if p_tokens else phrase, target="god_xau")
+            # Mathematical Dijkstra transmission path through edge weights to Gold/Asset
+            causal_path, path_weight = self.find_shortest_causal_path(p_tokens[0] if p_tokens else phrase)
             causal = self.lead_arbiter.derive_causal_pathway(
                 context_headline,
                 cluster_idx=cand_cluster,
@@ -691,7 +575,7 @@ class TopologyEngine:
         for cand in candidates:
             words = set(cand["phrase"].split())
             headline = cand.get("sample_headline", "")
-            headline_words = set(re.findall(r'[a-zA-Z]{3,}', headline.lower())) - STOPWORDS
+            headline_words = set(w for w in re.findall(r'[a-zA-Z]{3,}', headline.lower()) if (self.word_doc_frequencies.get(w, 0) / total_docs) < 0.32)
             
             # Skip if phrase words overlap
             if any(w in seen_words for w in words):
@@ -720,19 +604,22 @@ class TopologyEngine:
 
         degrees = {nid: len(adj[nid]) for nid in self.nodes}
 
-        hops_to_god = {nid: 999 for nid in self.nodes}
-        hops_to_god["god_xau"] = 0
-        queue = deque(["god_xau"])
-        visited = {"god_xau"}
+        asset_id = "gold" if "gold" in self.nodes else ("xau" if "xau" in self.nodes else None)
+        hops_to_asset = {nid: 999 for nid in self.nodes}
 
-        while queue:
-            curr = queue.popleft()
-            curr_dist = hops_to_god[curr]
-            for neighbor in adj[curr]:
-                if neighbor not in visited:
-                    visited.add(neighbor)
-                    hops_to_god[neighbor] = curr_dist + 1
-                    queue.append(neighbor)
+        if asset_id:
+            hops_to_asset[asset_id] = 0
+            queue = deque([asset_id])
+            visited = {asset_id}
+
+            while queue:
+                curr = queue.popleft()
+                curr_dist = hops_to_asset[curr]
+                for neighbor in adj[curr]:
+                    if neighbor not in visited:
+                        visited.add(neighbor)
+                        hops_to_asset[neighbor] = curr_dist + 1
+                        queue.append(neighbor)
 
         comp_visited = set()
         components = {}
@@ -752,35 +639,36 @@ class TopologyEngine:
                 components[comp_idx] = comp_members
                 comp_idx += 1
 
-        return degrees, hops_to_god, components
+        return degrees, hops_to_asset, components
 
     def prune_and_decay(self):
         now = time.time()
         
-        # 1. Decay edge weights (Two-Speed Adaptive Half-Life: 2h Kinetic vs 8h Structural Macro)
+        # 1. Decay edge weights based on publisher corroboration
         expired_edges = []
         for key, edge in self.edges.items():
             dt = now - edge["last_seen"]
-            is_structural = (key[0] == "god_xau" or key[1] == "god_xau" or key[0] in INVARIANT_MACRO_CORE or key[1] in INVARIANT_MACRO_CORE)
-            decay_const = self.structural_decay_constant if is_structural else self.decay_constant
-            decay_half_life = self.structural_half_life if is_structural else self.half_life
+            # Co-occurrences corroborated across 2+ distinct publishers have 8h half-life; single-source 2h
+            n1_pubs = len(self.token_publishers.get(key[0], []))
+            n2_pubs = len(self.token_publishers.get(key[1], []))
+            is_corroborated = (n1_pubs >= 2 and n2_pubs >= 2)
+            
+            decay_const = self.structural_decay_constant if is_corroborated else self.decay_constant
+            decay_half_life = self.structural_half_life if is_corroborated else self.half_life
             
             decay = math.exp(-decay_const * dt)
             edge["weight"] *= decay
-            min_thresh = 0.30 if (key[0] == "god_xau" or key[1] == "god_xau") else 0.12
+            min_thresh = 0.15
             if dt > decay_half_life or edge["weight"] < min_thresh:
                 expired_edges.append(key)
         for key in expired_edges:
             del self.edges[key]
 
         # 2. Mathematical Reachability & Orphan Culling
-        degrees, hops_to_god, components = self._compute_graph_topology()
+        degrees, hops_to_asset, components = self._compute_graph_topology()
 
         cull_nodes = set()
         for nid, data in self.nodes.items():
-            if data.get("is_god"):
-                continue
-
             dt_last = now - data["last_seen"]
             deg = degrees.get(nid, 0)
             pub_count = len(self.token_publishers.get(nid, []))
@@ -797,8 +685,7 @@ class TopologyEngine:
                 continue
 
             # Time expiration (older than adaptive half-life with no recent mention)
-            is_structural_node = (nid in INVARIANT_MACRO_CORE)
-            node_half_life = self.structural_half_life if is_structural_node else self.half_life
+            node_half_life = self.structural_half_life if pub_count >= 2 else self.half_life
             if dt_last > node_half_life:
                 cull_nodes.add(nid)
 
@@ -810,7 +697,7 @@ class TopologyEngine:
         for k in d_edges:
             del self.edges[k]
 
-        # 3. Clean up stale N-Gram phrase history to prevent memory leak and linguistic noise
+        # 3. Clean up stale N-Gram phrase history
         stale_phrases = [
             phrase for phrase, timestamps in self.phrase_history.items()
             if not timestamps or (now - max(timestamps)) > self.half_life
@@ -821,22 +708,20 @@ class TopologyEngine:
             self.phrase_sources.pop(p, None)
             self.phrase_contexts.pop(p, None)
 
-        # 4. Graph Density Clamping (K-core topological resilience, expanding capacity to 1000 nodes)
-        MAX_NODES = 1000
+        # 4. Graph Density Clamping (Vast capacity expanded to 1200 nodes)
+        MAX_NODES = 1200
         if len(self.nodes) > MAX_NODES:
-            # Score nodes by Degree * Mentions * Z-score
-            # Retain well-connected 2-core hubs; cull isolated dead singletons first
             degrees = {nid: 0 for nid in self.nodes}
             for (s, t) in self.edges.keys():
                 if s in degrees: degrees[s] += 1
                 if t in degrees: degrees[t] += 1
                 
-            non_god_nodes = [
-                (nid, degrees.get(nid, 0) * 2.0 + data.get("z_score", 0.0) * math.log(1.0 + self.token_mentions.get(nid, 1))) 
-                for nid, data in self.nodes.items() if not data.get("is_god")
+            scored_nodes = [
+                (nid, degrees.get(nid, 0) * 2.0 + data.get("z_score", 0.0) * math.log(1.0 + self.token_mentions.get(nid, 1)) * math.sqrt(len(self.token_publishers.get(nid, [])) or 1))
+                for nid, data in self.nodes.items()
             ]
-            non_god_nodes.sort(key=lambda x: x[1], reverse=True)
-            excess = set(nid for nid, _ in non_god_nodes[MAX_NODES - 5:])
+            scored_nodes.sort(key=lambda x: x[1], reverse=True)
+            excess = set(nid for nid, _ in scored_nodes[MAX_NODES - 10:])
             for nid in excess:
                 self.nodes.pop(nid, None)
             d_edges = [k for k in self.edges.keys() if k[0] in excess or k[1] in excess]
@@ -845,7 +730,7 @@ class TopologyEngine:
 
     def export_graph_json(self) -> Dict[str, Any]:
         self.prune_and_decay()
-        degrees, hops_to_god, _ = self._compute_graph_topology()
+        degrees, hops_to_asset, _ = self._compute_graph_topology()
         communities, community_meta = self._discover_communities()
 
         # Map each node to its dynamic emergent community
@@ -888,14 +773,20 @@ class TopologyEngine:
                 age_dist["over_60m"] += 1
 
             # Dynamic cluster index assigned organically by graph community
-            dyn_cluster = node_cluster_map.get(nid, 0) if not d.get("is_god") else 0
+            dyn_cluster = node_cluster_map.get(nid, 0)
 
             # Extract verification and provenance
             pubs = list(self.token_publishers.get(nid, []))
-            is_crowd = (len(pubs) > 0 and all(p.lower() in CROWD_SOURCES or 'crowd' in p.lower() or 'search' in p.lower() or 'wiki' in p.lower() or 'mastodon' in p.lower() for p in pubs))
+            is_crowd = (self.token_is_crowd.get(nid, False) and not self.token_is_wire.get(nid, False))
+            is_asset = (nid.lower() in {'gold', 'xau', 'silver', 'dxy', 'us10y', 'cl', 'brent'})
             clean_trigger = self._format_trigger_text(d.get("trigger_text", nid), 220)
             q_google = urllib.parse.quote(clean_trigger[:100])
             q_x = urllib.parse.quote(nid)
+            
+            # Dynamic node radius scaled with degree and Poisson acceleration
+            deg = degrees.get(nid, 0)
+            z = d.get("z_score", 0.0)
+            node_r = round(max(2.8, min(8.5, 2.5 + math.log(1.0 + deg) * 0.85 + min(2.5, z * 0.2))), 1)
 
             nodes_out.append({
                 "id": nid,
@@ -905,16 +796,16 @@ class TopologyEngine:
                 "surprisal": d.get("surprisal", 0.0),
                 "info_energy": d.get("info_energy", 0.0),
                 "is_surging": d.get("is_surging", False),
-                "is_god": d.get("is_god", False),
+                "is_asset": is_asset,
                 "is_crowd": is_crowd,
-                "r": d.get("r", 3.0),
+                "r": node_r,
                 "trigger_text": clean_trigger,
                 "trigger_source": d.get("trigger_source", ""),
                 "publishers": pubs,
                 "publisher_count": len(pubs),
                 "mention_count": self.token_mentions.get(nid, 1),
-                "degree": degrees.get(nid, 0),
-                "hops_to_xau": hops_to_god.get(nid, 999),
+                "degree": deg,
+                "hops_to_xau": hops_to_asset.get(nid, 999),
                 "age_seconds": age_sec,
                 "last_seen_seconds_ago": last_seen_sec,
                 "first_seen_str": first_str,
@@ -936,8 +827,7 @@ class TopologyEngine:
 
         constellations = self.extract_emerging_constellations(top_k=6)
         
-        # Primary Driver Verification: Elevated to Primary Driver IF AND ONLY IF
-        # corroborated across 2+ independent newsrooms, not pure crowd, with genuine Hawkes ratio >= 1.5
+        # Primary Driver Verification: Corroborated across 2+ independent newsrooms, not pure crowd, Hawkes ratio >= 1.5
         eligible_drivers = [
             c for c in constellations 
             if c.get("newsroom_count", 0) >= 2 

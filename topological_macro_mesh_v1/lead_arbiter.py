@@ -64,6 +64,7 @@ class LeadArbiter:
         self, 
         timestamps: List[float], 
         publishers: List[str] = None,
+        is_pure_crowd: bool = False,
         now: float = None,
         alpha: float = 1.25,
         beta: float = 0.0025, # ~15-20 min half-life
@@ -89,12 +90,11 @@ class LeadArbiter:
             }
 
         # Trap Safeguard: Publisher Quorum & Newsroom Verification
-        # Crowd sources alone (Wikipedia, Autocomplete) cannot trigger Hawkes Ignition!
-        CROWD_SOURCES = {'wikimedia attention pulse', 'google crowd autocomplete', 'mastodon decentralized fediverse'}
-        has_real_newsroom = any(p.lower() not in CROWD_SOURCES and 'crowd' not in p.lower() and 'search' not in p.lower() and 'wiki' not in p.lower() for p in publishers)
+        # Crowd sources alone cannot trigger Hawkes Ignition!
         distinct_pubs = len(set(publishers)) if publishers else 1
+        has_real_newsroom = not is_pure_crowd and distinct_pubs >= 1
 
-        if not has_real_newsroom:
+        if is_pure_crowd:
             alpha_adj = alpha * 0.15 # Severely dampen crowd self-polling loops
         elif distinct_pubs < 2 and len(timestamps) > 1:
             alpha_adj = alpha * 0.30
@@ -157,7 +157,7 @@ class LeadArbiter:
 
     def derive_causal_pathway(self, text: str, cluster_idx: int = 0, is_crowd_only: bool = False, transmission_path: List[str] = None) -> Dict[str, Any]:
         """
-        Traces the genuine sovereign macro transmission pipeline to Gold (XAUUSD).
+        Traces the genuine sovereign macro transmission pipeline to the target asset.
         Pure graph physics: Uses the living topological geodesic path across graph nodes.
         Zero fake theater: Crowd queries are never tagged as physical kinetic strikes.
         """
@@ -175,25 +175,32 @@ class LeadArbiter:
                 "inflection_summary": "Retail crowd curiosity; unconfirmed on sovereign institutional wires"
             }
 
-        # 2. Dynamic graph-derived geodesic transmission chain (Dijkstra optimal path to Gold)
+        # 2. Dynamic graph-derived geodesic transmission chain (Dijkstra optimal path to Asset)
         if transmission_path and len(transmission_path) >= 2:
-            clean_labels = []
-            for t in transmission_path:
-                lbl = "XAUUSD SPOT" if t == "god_xau" else t.replace("_", " ").title()
-                clean_labels.append(lbl)
+            clean_labels = [t.replace("_", " ").title() for t in transmission_path]
             transmission = " ➔ ".join(clean_labels)
             lead_entity = clean_labels[0]
             pipe_name = f"{lead_entity} Geodesic Transmission"
             pipeline = f"{transmission_path[0].upper()}_VECTOR"
             inflection_minutes = (max(5, len(transmission_path) * 4), len(transmission_path) * 8 + 10)
             gold_bias = "VOLATILITY_EXPANSION" if len(transmission_path) <= 3 else "STRUCTURAL_DIFFUSION"
+            inflection_summary = f"Expected tape response within {inflection_minutes[0]}-{inflection_minutes[1]} mins ({len(transmission_path)} hops)"
+        elif transmission_path and len(transmission_path) == 1:
+            lead_entity = transmission_path[0].replace("_", " ").title()
+            transmission = f"{lead_entity} (Organic community development; no active transmission bridge to asset)"
+            pipe_name = f"{lead_entity} Thematic Flow"
+            pipeline = f"{transmission_path[0].upper()}_VECTOR"
+            gold_bias = "EQUILIBRIUM_SEEKING"
+            inflection_minutes = (20, 45)
+            inflection_summary = f"{lead_entity} cluster developing organically in world news"
         else:
-            # Dynamic graph diffusion fallback (Zero hardcoded cluster assumptions)
+            # Dynamic graph diffusion fallback
             pipeline = "STRUCTURAL_DIFFUSION"
             pipe_name = "Topological Graph Diffusion"
             transmission = "Multi-Hop Cross-Cluster Transmission ➔ Orderbook Liquidity Absorption"
             gold_bias = "EQUILIBRIUM_SEEKING"
             inflection_minutes = (15, 35)
+            inflection_summary = "Expected tape response within 15-35 mins (diffuse network propagation)"
 
         return {
             "pipeline": pipeline,
@@ -202,7 +209,7 @@ class LeadArbiter:
             "expected_gold_impact": gold_bias,
             "inflection_window_min": inflection_minutes[0],
             "inflection_window_max": inflection_minutes[1],
-            "inflection_summary": f"Expected tape response within {inflection_minutes[0]}-{inflection_minutes[1]} mins ({len(transmission_path or [])} hops)"
+            "inflection_summary": inflection_summary
         }
 
     def calculate_attention_divergence(self, wire_z_scores: List[float], crowd_z_scores: List[float]) -> Dict[str, Any]:

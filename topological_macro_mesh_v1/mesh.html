@@ -297,13 +297,9 @@
     let nodes = [];
     let links = [];
 
-    // Central universal anchor
-    const centralGod = { id: 'god_xau', label: 'XAUUSD SPOT', cluster: 3, r: 7.5, x: width / 2, y: height / 2, isGod: true };
-    nodes.push(centralGod);
-
     const simulation = d3.forceSimulation(nodes)
       .force('link', d3.forceLink(links).id(d => d.id).distance(d => 30 + (1 / (d.weight || 0.5)) * 22).strength(d => (d.weight || 0.5) * 0.16))
-      .force('charge', d3.forceManyBody().strength(d => d.isGod ? -140 : (-18 - d.r * 5)).distanceMax(420))
+      .force('charge', d3.forceManyBody().strength(d => d.is_asset ? -100 : (-18 - d.r * 5)).distanceMax(420))
       .force('center', d3.forceCenter(width / 2, height / 2))
       .force('collision', d3.forceCollide().radius(d => d.r + 2.0).iterations(2))
       .alphaDecay(0.02)
@@ -334,14 +330,17 @@
     requestAnimationFrame(renderCanvas);
 
     function findShortestPathToGold(startNode) {
-      if (!startNode || startNode.id === 'god_xau') return [];
+      if (!startNode) return [];
+      const targetAsset = nodes.find(n => n.id === 'gold' || n.id === 'xau' || n.is_asset);
+      if (!targetAsset || startNode.id === targetAsset.id) return [];
 
+      const targetId = targetAsset.id;
       const queue = [{ id: startNode.id, path: [] }];
       const visited = new Set([startNode.id]);
 
       while (queue.length > 0) {
         const { id, path } = queue.shift();
-        if (id === 'god_xau') return path;
+        if (id === targetId) return path;
 
         const neighborEdges = links.filter(l => {
           const sId = typeof l.source === 'object' ? l.source.id : l.source;
@@ -460,11 +459,11 @@
         ctx.fill();
         ctx.shadowBlur = 0;
 
-        if (node.id === 'god_xau') {
+        if (node.is_asset || node.id === 'gold' || node.id === 'xau') {
           ctx.font = 'bold 11px ui-sans-serif, system-ui, sans-serif';
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+          ctx.fillStyle = '#f59e0b';
           ctx.textAlign = 'center';
-          ctx.fillText('XAUUSD SPOT', node.x, node.y + node.r + 12);
+          ctx.fillText('⚡ ' + node.label.toUpperCase(), node.x, node.y + node.r + 12);
         }
       }
 
@@ -655,9 +654,9 @@
     }
 
     function focusTopOutlier() {
-      const nonGod = nodes.filter(n => !n.isGod && (n.z_score || 0) > 0);
-      if (nonGod.length === 0) return;
-      const top = nonGod.sort((a, b) => (b.z_score || 0) - (a.z_score || 0))[0];
+      const candidates = nodes.filter(n => (n.z_score || 0) > 0);
+      if (candidates.length === 0) return;
+      const top = candidates.sort((a, b) => (b.z_score || 0) - (a.z_score || 0))[0];
       if (top) {
         d3.select(canvas).transition().duration(800).call(
           zoom.transform,
@@ -692,6 +691,7 @@
             existing.label = rn.label;
             existing.z_score = rn.z_score || 0.0;
             existing.isSurging = rn.is_surging || (rn.z_score >= 10.0);
+            existing.is_asset = rn.is_asset || false;
             existing.trigger_text = rn.trigger_text || '';
             existing.trigger_source = rn.trigger_source || '';
             existing.hops_to_xau = rn.hops_to_xau;
@@ -699,7 +699,7 @@
             existing.first_seen_str = rn.first_seen_str || 'Recently';
             existing.last_seen_str = rn.last_seen_str || 'Just now';
             existing.freshness_regime = rn.freshness_regime || 'ACTIVE';
-            existing.r = existing.isGod ? 7.5 : (existing.isSurging ? 5.2 : (rn.r || 3.0));
+            existing.r = rn.r || (existing.isSurging ? 5.2 : 3.0);
           } else {
             const angle = Math.random() * Math.PI * 2;
             const dist = 80 + Math.random() * 220;
@@ -707,10 +707,10 @@
               id: rn.id,
               label: rn.label,
               cluster: rn.cluster,
-              r: rn.is_god ? 7.5 : (rn.is_surging ? 5.2 : (rn.r || 3.0)),
+              r: rn.r || (rn.is_surging ? 5.2 : 3.0),
               z_score: rn.z_score || 0.0,
               isSurging: rn.is_surging || (rn.z_score >= 10.0),
-              isGod: rn.is_god || false,
+              is_asset: rn.is_asset || false,
               trigger_text: rn.trigger_text || '',
               trigger_source: rn.trigger_source || '',
               hops_to_xau: rn.hops_to_xau,
@@ -728,10 +728,10 @@
           }
         });
 
-        // 2. Remove culled nodes (keep god anchors)
+        // 2. Remove culled nodes
         for (let i = nodes.length - 1; i >= 0; i--) {
           const n = nodes[i];
-          if (!n.isGod && !liveNodeMap.has(n.id)) {
+          if (!liveNodeMap.has(n.id)) {
             nodes.splice(i, 1);
             nodesChanged = true;
           }
@@ -798,7 +798,7 @@
         }
 
         // Update Top Shock Anomaly Header Pill
-        const topOutlier = data.nodes.filter(n => !n.is_god).sort((a, b) => (b.z_score || 0) - (a.z_score || 0))[0];
+        const topOutlier = data.nodes.slice().sort((a, b) => (b.z_score || 0) - (a.z_score || 0))[0];
         if (topOutlier) {
           const highestEl = document.getElementById('hud-highest-shock');
           if (highestEl) highestEl.innerText = `${topOutlier.label} (+${topOutlier.z_score}σ)`;
@@ -924,7 +924,7 @@
         card.className = 'p-2.5 rounded bg-zinc-900/95 border border-zinc-800 hover:border-zinc-700 transition cursor-pointer space-y-1.5 shadow-sm overflow-hidden max-w-full';
         
         // Match node in graph if possible
-        const matchedNode = nodes.find(n => !n.isGod && c.phrase && c.phrase.includes(n.id));
+        const matchedNode = nodes.find(n => c.phrase && c.phrase.includes(n.id));
         if (matchedNode) {
           card.onclick = () => {
             d3.select(canvas).transition().duration(800).call(

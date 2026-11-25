@@ -18,7 +18,7 @@ import re
 import html
 import email.utils
 from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Set
 
 class DataCollector:
     def __init__(self):
@@ -471,53 +471,71 @@ class DataCollector:
                     pass
         return posts
 
-    def fetch_public_search_trajectories(self, dynamic_seeds: List[str] = None) -> List[Dict[str, str]]:
-        """Dynamic real-world search autocomplete trajectories revealing active public inquiries."""
+    def fetch_public_search_trajectories(self, dynamic_seeds: List[str] = None, active_vocabulary: Set[str] = None) -> List[Dict[str, str]]:
+        """
+        Dynamic real-world search autocomplete trajectories.
+        Uses Joint N-Gram Query Conditioning (collapsing consumer noise entropy) and
+        an Intermediary Semantic Overlap Gate to reject orthogonal consumer chatter.
+        """
         posts = []
         if not dynamic_seeds:
             return []
         
-        search_seeds = [s for s in dynamic_seeds if len(s) >= 3 and not s.isdigit()][:5]
+        # Build joint search phrases from substantive tokens (never unconditioned single words like 'public')
+        valid_seeds = [s.strip().lower() for s in dynamic_seeds if len(s.strip()) >= 3 and s.strip().isalpha()]
+        search_phrases = []
+        if len(valid_seeds) >= 2:
+            for i in range(min(4, len(valid_seeds) - 1)):
+                search_phrases.append(f"{valid_seeds[i]} {valid_seeds[i+1]}")
+        elif len(valid_seeds) == 1:
+            search_phrases.append(valid_seeds[0])
 
-        # Mathematical Shannon Character Entropy & Lexical Density Filter
-        # Rejects low-entropy dictionary lookups, repetitive searches, and trivial single-word noise without keyword lists
-        for seed in search_seeds:
-            url = f"https://suggestqueries.google.com/complete/search?client=firefox&q={urllib.parse.quote(seed)}"
+        for phrase in search_phrases[:4]:
+            url = f"https://suggestqueries.google.com/complete/search?client=firefox&q={urllib.parse.quote(phrase)}"
             raw_sugg = self._fetch_safe(url, "Google Crowd Autocomplete", timeout=4)
             if raw_sugg:
                 try:
                     sugg_data = json.loads(raw_sugg.decode('utf-8', errors='ignore'))
                     suggestions = sugg_data[1] if len(sugg_data) > 1 else []
-                    for phrase in suggestions[:3]:
-                        if phrase and len(phrase) > 8:
-                            # 1. Shannon Character Entropy H(S)
-                            from collections import Counter
-                            c_counts = Counter(phrase.lower())
-                            p_len = len(phrase)
-                            entropy = -sum((cnt / p_len) * math.log2(cnt / p_len) for cnt in c_counts.values())
-                            if entropy < 2.9: # Low-entropy repetitive text or trivial lookup
+                    for sugg in suggestions[:3]:
+                        if not sugg or len(sugg) < 8:
+                            continue
+                        
+                        # 1. Shannon Character Entropy H(S)
+                        from collections import Counter
+                        c_counts = Counter(sugg.lower())
+                        p_len = len(sugg)
+                        entropy = -sum((cnt / p_len) * math.log2(cnt / p_len) for cnt in c_counts.values())
+                        if entropy < 3.0 or entropy > 5.2:
+                            continue
+
+                        s_words = [w for w in re.findall(r'[a-zA-Z]{3,}', sugg.lower())]
+                        if len(set(s_words)) < 2:
+                            continue
+
+                        # 2. Intermediary Semantic Overlap Gate:
+                        # Ensures the crowd suggestion shares semantic subspace overlap with live global news.
+                        # Eliminates orthogonal consumer chatter (e.g. 'public toilet near me') with ZERO hardcoded blacklists!
+                        if active_vocabulary:
+                            overlap = sum(1 for w in s_words if w in active_vocabulary)
+                            if overlap == 0:
                                 continue
 
-                            words = [w for w in re.findall(r'[a-zA-Z]{3,}', phrase.lower())]
-                            # Require at least 2 distinct substantive words
-                            if len(set(words)) < 2:
-                                continue
-
-                            posts.append({
-                                "source": f"Public Search: {seed}",
-                                "publisher": "Google Crowd Autocomplete",
-                                "text": phrase
-                            })
+                        posts.append({
+                            "source": f"Public Search: {phrase}",
+                            "publisher": "Google Crowd Autocomplete",
+                            "text": sugg
+                        })
                 except Exception:
                     pass
         return posts
 
-    def fetch_crowd_squawks_and_queries(self, dynamic_seeds: List[str] = None) -> List[Dict[str, str]]:
+    def fetch_crowd_squawks_and_queries(self, dynamic_seeds: List[str] = None, active_vocabulary: Set[str] = None) -> List[Dict[str, str]]:
         """Aggregates all crowd sources: Wikipedia Attention, Federated Mastodon, and Search Trajectories."""
         posts = []
         posts.extend(self.fetch_wikipedia_crowd_pageviews(dynamic_topics=dynamic_seeds))
         posts.extend(self.fetch_federated_mastodon_squawks(dynamic_seeds=dynamic_seeds))
-        posts.extend(self.fetch_public_search_trajectories(dynamic_seeds=dynamic_seeds))
+        posts.extend(self.fetch_public_search_trajectories(dynamic_seeds=dynamic_seeds, active_vocabulary=active_vocabulary))
         return posts
 
     def get_health_status(self) -> Dict[str, Any]:
@@ -567,22 +585,28 @@ class DataCollector:
         market = self.fetch_intermarket_wires()
         physical = self.fetch_physical_bullion_and_vault_wires()
 
-        # If dynamic_seeds not supplied by topology graph, derive dynamically from freshly fetched wire headlines!
+        # Build active newsroom vocabulary for the Intermediary Semantic Overlap Gate
+        active_vocab = set()
+        primary_docs = sovereign + geopolitical + market + physical
+        for item in primary_docs:
+            txt = item.get("text", "").lower()
+            active_vocab.update(re.findall(r'[a-zA-Z]{3,}', txt))
+
+        # Dynamic Zipfian Seed Derivation (Zero Hardcoded Stopwords or Fallback Lists)
         if not dynamic_seeds:
             from collections import Counter
-            all_text = " ".join([item.get("text", "") for item in sovereign + geopolitical + market + physical])
-            COMMON_FILTER = {
-                'the', 'and', 'for', 'that', 'this', 'with', 'from', 'have', 'were', 'which', 'about',
-                'news', 'today', 'daily', 'report', 'update', 'brief', 'market', 'price', 'rates', 'said',
-                'first', 'after', 'will', 'year', 'more', 'over', 'into', 'some', 'than', 'them', 'also'
-            }
-            words = [w for w in re.findall(r'[a-zA-Z]{4,}', all_text.lower()) if w not in COMMON_FILTER]
+            all_text = " ".join([item.get("text", "") for item in primary_docs])
+            words = re.findall(r'[a-zA-Z]{4,}', all_text.lower())
             if words:
-                dynamic_seeds = [w for w, _ in Counter(words).most_common(5)]
+                counts = Counter(words)
+                total_items = max(10, len(primary_docs))
+                # Skip words appearing in > 35% of all items (pure structural grammatical particles)
+                salient_words = [w for w, cnt in counts.most_common(25) if (cnt / total_items) < 0.35]
+                dynamic_seeds = salient_words[:5]
             else:
-                dynamic_seeds = ['gold', 'dollar', 'yields', 'crude']
+                dynamic_seeds = []
 
-        crowd = self.fetch_crowd_squawks_and_queries(dynamic_seeds=dynamic_seeds)
+        crowd = self.fetch_crowd_squawks_and_queries(dynamic_seeds=dynamic_seeds, active_vocabulary=active_vocab)
         health = self.get_health_status()
 
         return {
