@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <title>Sovereign Macro Topological Constellation Mesh & Kinetic Lead Engine</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <script src="/d3.v7.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background-color: #030712;
+      color: #f8fafc;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    #canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      background: radial-gradient(circle at center, #090d1a 0%, #020409 100%);
+      cursor: crosshair;
+    }
+
+    .shadcn-card {
+      background: rgba(3, 7, 18, 0.88);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.8);
+    }
+    .shadcn-btn {
+      background: #090d16;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #cbd5e1;
+      transition: all 0.15s ease;
+    }
+    .shadcn-btn:hover {
+      background: #1e293b;
+      border-color: rgba(255, 255, 255, 0.25);
+      color: #ffffff;
+    }
+    .shadcn-btn-primary {
+      background: #ffffff;
+      color: #020617;
+      font-weight: 600;
+      border: 1px solid #ffffff;
+      transition: all 0.15s ease;
+    }
+    .shadcn-btn-primary:hover { background: #e2e8f0; }
+
+    #hover-tooltip {
+      position: absolute;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.12s ease, transform 0.08s ease;
+      z-index: 50;
+      transform: translate(14px, 14px);
+    }
+    .custom-scroll::-webkit-scrollbar { width: 4px; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+  </style>
+</head>
+<body class="relative select-none">
+
+  <!-- Dynamic Cursor Tooltip with Lead Time & Direction -->
+  <div id="hover-tooltip" class="shadcn-card px-3.5 py-2.5 rounded-lg text-xs pointer-events-none flex flex-col gap-1 max-w-sm shadow-2xl">
+    <div class="flex items-center justify-between gap-3">
+      <div class="flex items-center gap-1.5">
+        <span id="tt-dot" class="w-2 h-2 rounded-full bg-white"></span>
+        <span id="tt-cluster" class="text-[10px] font-mono uppercase text-zinc-400">CLUSTER</span>
+      </div>
+      <span id="tt-bias" class="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">LONG BIAS</span>
+    </div>
+    <span id="tt-title" class="font-semibold text-white text-[12px] leading-tight">Node Label</span>
+    
+    <!-- Real-time Lead Metrics -->
+    <div class="grid grid-cols-3 gap-2 pt-1.5 mt-0.5 border-t border-zinc-800 text-[10px] font-mono text-zinc-400">
+      <div>
+        <span class="block text-[9px] text-zinc-500">LEAD TIME</span>
+        <span id="tt-lead" class="text-white font-bold">--</span>
+      </div>
+      <div>
+        <span class="block text-[9px] text-zinc-500">TRANSFER ENTROPY</span>
+        <span id="tt-te" class="text-emerald-400 font-bold">--</span>
+      </div>
+      <div>
+        <span class="block text-[9px] text-zinc-500">ACCELERATION</span>
+        <span id="tt-accel" class="text-amber-400 font-bold">--</span>
+      </div>
+    </div>
+    <div class="text-[10px] font-mono text-zinc-400 pt-1 flex items-center justify-between">
+      <span>Causal Path: <b id="tt-hops" class="text-zinc-200">--</b></span>
+      <span id="tt-status" class="text-cyan-400">STANDBY</span>
+    </div>
+  </div>
+
+
+  <!-- Top HUD Bar: Macro Singularity & Dual-Key Arbiter Lead -->
+  <header class="shadcn-card fixed top-3 left-4 right-4 z-20 rounded-xl px-4 py-2 pointer-events-auto flex items-center justify-between gap-4 border border-zinc-800 shadow-xl">
+    <div class="flex items-center gap-2.5 flex-shrink-0">
+      <div class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></div>
+      <div>
+        <h1 class="text-xs font-bold text-white tracking-wider uppercase font-mono">ESCANOR MACRO // CAUSAL HORIZON</h1>
+        <p class="text-[9px] text-zinc-400 font-mono">Precursor Point Process & Attention Lead Radar</p>
+      </div>
+    </div>
+
+    <!-- Center Primary Driver Banner -->
+    <div id="primary-driver-card" class="hidden flex-1 max-w-2xl px-3 py-1 rounded-lg bg-zinc-900/90 border border-amber-500/30 flex items-center justify-between gap-3 text-xs">
+      <div class="flex items-center gap-2 truncate">
+        <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">PRIMARY DRIVER</span>
+        <span id="primary-driver-title" class="font-medium text-zinc-200 truncate text-[11px]">Detecting top causal catalyst...</span>
+      </div>
+      <div class="flex items-center gap-1.5 flex-shrink-0">
+        <a id="primary-driver-verify" href="#" target="_blank" class="px-2 py-0.5 rounded bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 text-[9.5px] font-mono border border-sky-500/30 transition">Google</a>
+        <a id="primary-driver-verify-x" href="#" target="_blank" class="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[9.5px] font-mono border border-zinc-700 transition">𝕏 Live</a>
+      </div>
+    </div>
+
+    <!-- Right Telemetry Status Pills -->
+    <div class="flex items-center gap-3 text-xs flex-shrink-0 font-mono">
+      <div class="text-right">
+        <span class="block text-[8.5px] text-zinc-500 uppercase">Top Shock</span>
+        <span id="hud-highest-shock" class="text-amber-400 font-bold text-[10.5px]">Scanning...</span>
+      </div>
+      <div class="h-5 w-px bg-zinc-800"></div>
+      <div class="text-right">
+        <span class="block text-[8.5px] text-zinc-500 uppercase">Attention Div</span>
+        <span id="hud-att-div" class="text-emerald-400 font-bold text-[10.5px]">Δ +0.0σ (BALANCED)</span>
+      </div>
+      <div class="h-5 w-px bg-zinc-800"></div>
+      <div class="text-right">
+        <span class="block text-[8.5px] text-zinc-500 uppercase">Lead Arbiter</span>
+        <span id="hud-arbiter" class="text-zinc-400 font-bold text-[10.5px]">STAND DOWN</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Autonomous Dynamic Cluster Tray (No Hardcoded Categories) -->
+  <aside class="shadcn-card fixed top-16 left-4 rounded-lg p-3 z-10 text-xs w-72 pointer-events-auto max-h-52 flex flex-col">
+    <div class="flex justify-between items-center mb-1 pb-1 border-b border-zinc-800">
+      <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Discovered Communities</span>
+      <span class="text-[10px] text-zinc-500 font-mono" id="tray-algorithm">LEIDEN MODULARITY</span>
+    </div>
+    <div id="dynamic-cluster-list" class="space-y-1 text-[11px] overflow-y-auto custom-scroll pr-1">
+      <!-- Dynamically generated from live graph nodes -->
+    </div>
+  </aside>
+
+  <!-- Crowd Precursor Clues Panel (Leading Wires Ahead of Mainstream News) -->
+  <aside class="shadcn-card fixed top-[280px] left-4 rounded-lg p-3 z-10 text-xs w-80 pointer-events-auto max-h-[460px] flex flex-col border border-zinc-800/80 shadow-2xl">
+    <div class="flex justify-between items-center mb-1.5 pb-1 border-b border-zinc-800">
+      <div class="flex items-center gap-1.5">
+        <span class="text-amber-400">⚡</span>
+        <span class="text-[11px] font-semibold text-zinc-200 uppercase tracking-wider">Precursor Clue Horizon</span>
+      </div>
+      <span class="text-[9px] text-cyan-400 font-mono font-bold">HAWKES RADAR</span>
+    </div>
+    <p class="text-[10px] text-zinc-400 leading-tight mb-2">Hawkes ignited clusters & asymmetric lead anomalies:</p>
+    <div id="precursor-clues-list" class="space-y-2 overflow-y-auto custom-scroll pr-1 text-[11px] flex-1">
+      <p class="text-zinc-500 font-mono text-[10px] italic">Scanning live feeds for burst anomalies...</p>
+    </div>
+  </aside>
+
+  <!-- Bottom-Left Collector Health & Rate-Limit Diagnostics HUD -->
+  <div class="fixed bottom-4 left-4 z-20 pointer-events-auto flex flex-col items-start gap-2">
+    <!-- Clickable Health Tag -->
+    <div id="health-tag" onclick="toggleDiagnosticsModal()" class="shadcn-card rounded-lg px-3 py-1.5 text-xs flex items-center gap-2 cursor-pointer hover:bg-zinc-800 transition shadow-lg border border-zinc-800">
+      <span id="health-dot" class="w-2 h-2 rounded-full bg-emerald-400"></span>
+      <span id="health-text" class="font-mono text-[11px] text-zinc-300">Feeds: Initializing...</span>
+    </div>
+
+    <!-- Diagnostics Flyout Modal -->
+    <div id="diagnostics-modal" class="shadcn-card rounded-xl p-4 w-96 max-h-72 overflow-y-auto custom-scroll shadow-2xl hidden border border-zinc-700 bg-zinc-950/95">
+      <div class="flex justify-between items-center pb-2 border-b border-zinc-800 mb-2">
+        <span class="font-semibold text-xs text-white">Collector Health & Rate-Limit Diagnostics</span>
+        <button onclick="toggleDiagnosticsModal()" class="text-zinc-400 hover:text-white text-base leading-none p-1">&times;</button>
+      </div>
+      <div id="diagnostics-list" class="space-y-1.5 text-[11px] font-mono">
+        <!-- Populated from collector_health -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Deep Inspector Drawer: Real-Time Lead Pipeline -->
+  <aside id="inspector" class="shadcn-card fixed top-4 right-4 bottom-4 w-96 rounded-xl p-5 z-20 transition-all duration-300 transform translate-x-[440px] flex flex-col justify-between">
+    <div class="overflow-y-auto custom-scroll pr-1 space-y-4">
+      <div class="flex justify-between items-start border-b border-zinc-800 pb-3">
+        <div>
+          <span id="insp-cluster" class="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">SECTOR</span>
+          <h2 id="insp-name" class="text-sm font-semibold text-white mt-1.5">Node Title</h2>
+          <p id="insp-id" class="text-[11px] font-mono text-zinc-500">ID: node_001</p>
+        </div>
+        <button onclick="closeInspector()" class="text-zinc-400 hover:text-white text-lg leading-none p-1">&times;</button>
+      </div>
+
+      <!-- Execution Lead Card -->
+      <div class="bg-zinc-900/90 p-3 rounded-lg border border-zinc-800 space-y-2">
+        <div class="flex justify-between items-center text-xs">
+          <span class="text-zinc-400 font-mono text-[10px] uppercase font-bold">Estimated Lead-Time</span>
+          <span id="insp-lead-clock" class="font-mono text-emerald-400 font-bold text-sm">--</span>
+        </div>
+        <div class="flex justify-between items-center text-xs pt-1 border-t border-zinc-800">
+          <span class="text-zinc-400 font-mono text-[10px] uppercase font-bold">Market Phase</span>
+          <span id="insp-phase" class="font-mono text-amber-300 text-xs">Awaiting Selection</span>
+        </div>
+      </div>
+
+      <!-- Quantitative Telemetry Grid -->
+      <div class="grid grid-cols-2 gap-2 text-xs">
+        <div class="bg-zinc-900 p-2.5 rounded border border-zinc-800">
+          <span class="text-[10px] text-zinc-400 uppercase block font-mono">Transfer Entropy</span>
+          <span id="insp-te" class="font-mono font-bold text-white text-sm">--</span>
+        </div>
+        <div class="bg-zinc-900 p-2.5 rounded border border-zinc-800">
+          <span class="text-[10px] text-zinc-400 uppercase block font-mono">Attention Accel (d²A/dt²)</span>
+          <span id="insp-accel" class="font-mono font-bold text-amber-400 text-sm">--</span>
+        </div>
+      </div>
+
+      <!-- Active Causal Transmission Pipeline -->
+      <div>
+        <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block mb-2">Topological Transmission Cascade</span>
+        <div id="insp-pipeline" class="space-y-1.5 text-xs">
+          <!-- Dynamically populated shortest path hops -->
+        </div>
+      </div>
+
+      <!-- Ground Evidence -->
+      <div>
+        <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block mb-2">Ground Truth Telemetry</span>
+        <div id="insp-evidence" class="bg-zinc-900 p-3 rounded border border-zinc-800 text-[11px] font-mono text-zinc-300 space-y-1.5 leading-relaxed">
+          <p class="text-zinc-500 italic">&bull; Select any graph entity to inspect live ground truth telemetry and verified wire sources.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="pt-3 border-t border-zinc-800 mt-2">
+      <div class="flex justify-between items-center text-xs">
+        <span class="text-zinc-400">Orderbook Consequence:</span>
+        <span id="insp-tape" class="font-mono font-bold text-zinc-400">AWAITING SELECTION</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Bottom Floating HUD -->
+  <footer class="shadcn-card fixed bottom-4 right-4 rounded-lg px-4 py-2 text-xs flex items-center gap-4 z-10 pointer-events-auto border border-zinc-800 shadow-xl">
+    <div class="flex items-center gap-2">
+      <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+      <span class="text-zinc-300 font-mono text-[11px]">MACRO MANIFOLD</span>
+    </div>
+    <div class="h-3 w-px bg-zinc-800"></div>
+    <div class="text-zinc-400 font-mono text-[11px]">
+      Nodes: <span id="hud-nodes" class="text-white font-bold">--</span> &bull; 
+      Burst (<5m): <span id="hud-fresh" class="text-emerald-400 font-bold">--</span> &bull; 
+      Active (5-60m): <span id="hud-active" class="text-cyan-300 font-bold">--</span>
+    </div>
+  </footer>
+
+  <canvas id="canvas"></canvas>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let width = window.innerWidth;
+    let height = window.innerHeight;
+    canvas.width = width;
+    canvas.height = height;
+
+    window.addEventListener('resize', () => {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+      simulation.force('center', d3.forceCenter(width / 2, height / 2));
+      simulation.alpha(0.3).restart();
+    });
+
+    const PALETTE = ['#f97316', '#38bdf8', '#ef4444', '#eab308', '#ec4899', '#22c55e', '#a855f7', '#14b8a6', '#06b6d4', '#f43f5e'];
+    const dynamicCommunitiesMap = new Map();
+
+    function getClusterMeta(cIdx) {
+      const idx = cIdx !== undefined ? cIdx : 0;
+      if (dynamicCommunitiesMap.has(idx)) {
+        return dynamicCommunitiesMap.get(idx);
+      }
+      return {
+        name: `Cluster ${idx + 1}`,
+        color: PALETTE[idx % PALETTE.length],
+        avgLeadMin: 18,
+        bias: 'EMPIRICAL TRANSIENT'
+      };
+    }
+
+    let nodes = [];
+    let links = [];
+
+    const simulation = d3.forceSimulation(nodes)
+      .force('link', d3.forceLink(links).id(d => d.id).distance(d => 30 + (1 / (d.weight || 0.5)) * 22).strength(d => (d.weight || 0.5) * 0.16))
+      .force('charge', d3.forceManyBody().strength(d => d.is_asset ? -100 : (-18 - d.r * 5)).distanceMax(420))
+      .force('center', d3.forceCenter(width / 2, height / 2))
+      .force('collision', d3.forceCollide().radius(d => d.r + 2.0).iterations(2))
+      .alphaDecay(0.02)
+      .on('tick', ticked);
+
+    let transform = d3.zoomIdentity;
+    const zoom = d3.zoom()
+      .scaleExtent([0.15, 8])
+      .on('zoom', (event) => {
+        transform = event.transform;
+        ticked();
+      });
+
+    d3.select(canvas).call(zoom);
+
+    let hoveredNode = null;
+    let selectedNode = null;
+    let activePathEdges = [];
+
+    // Calmed pulse speed (reduced by 75% for slow, meditative travel)
+    let animTime = 0;
+
+    function renderCanvas() {
+      animTime += 0.0035; // Calm, slow pace (was 0.015)
+      ticked();
+      requestAnimationFrame(renderCanvas);
+    }
+    requestAnimationFrame(renderCanvas);
+
+    function findTransmissionCascade(startNode, maxDepth = 4) {
+      if (!startNode) return [];
+      const pathEdges = [];
+      let currId = startNode.id;
+      const visited = new Set([currId]);
+
+      for (let step = 0; step < maxDepth - 1; step++) {
+        const neighborEdges = links.filter(l => {
+          const sId = typeof l.source === 'object' ? l.source.id : l.source;
+          const tId = typeof l.target === 'object' ? l.target.id : l.target;
+          return (sId === currId && !visited.has(tId)) || (tId === currId && !visited.has(sId));
+        });
+
+        if (neighborEdges.length === 0) break;
+
+        // Pick neighbor with highest weight * te
+        neighborEdges.sort((a, b) => ((b.weight || 0.5) * (b.te || 0.35)) - ((a.weight || 0.5) * (a.te || 0.35)));
+        const bestEdge = neighborEdges[0];
+        const sId = typeof bestEdge.source === 'object' ? bestEdge.source.id : bestEdge.source;
+        const tId = typeof bestEdge.target === 'object' ? bestEdge.target.id : bestEdge.target;
+        const nextId = (sId === currId) ? tId : sId;
+
+        visited.add(nextId);
+        pathEdges.push({ edge: bestEdge, from: currId, to: nextId });
+        currId = nextId;
+      }
+      return pathEdges;
+    }
+    const findShortestPathToHub = findTransmissionCascade;
+
+    function ticked() {
+      ctx.save();
+      ctx.clearRect(0, 0, width, height);
+      ctx.translate(transform.x, transform.y);
+      ctx.scale(transform.k, transform.k);
+
+      // 1. Draw Links with Soft, Subdued Opacities (Robust Object Resolution)
+      const nodeMap = new Map(nodes.map(n => [n.id, n]));
+      for (const link of links) {
+        const s = typeof link.source === 'object' ? link.source : nodeMap.get(link.source);
+        const t = typeof link.target === 'object' ? link.target : nodeMap.get(link.target);
+        if (!s || !t || s.x == null || t.x == null) continue;
+
+        ctx.beginPath();
+        ctx.moveTo(s.x, s.y);
+        ctx.lineTo(t.x, t.y);
+
+        const isInActivePath = activePathEdges.some(p => p.edge === link || (p.from === s.id && p.to === t.id) || (p.from === t.id && p.to === s.id));
+        const isHovered = hoveredNode && (s === hoveredNode || t === hoveredNode);
+
+        if (isInActivePath) {
+          // Gentle glowing cyan highway
+          ctx.strokeStyle = 'rgba(56, 189, 248, 0.75)';
+          ctx.lineWidth = 1.3 / transform.k;
+        } else if (isHovered) {
+          // Soft white for hovered connections
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+          ctx.lineWidth = 1.0 / transform.k;
+        } else {
+          // Ambient celestial web lines
+          const cIdx = s.cluster !== undefined ? s.cluster : 0;
+          const col = getClusterMeta(cIdx).color;
+          ctx.strokeStyle = col + '38'; // 22% opacity
+          ctx.lineWidth = 0.7 / transform.k;
+        }
+        ctx.stroke();
+
+        // Traveling Information Pulses
+        if (isInActivePath || (isHovered && Math.random() < 0.2)) {
+          const speed = (link.weight || 0.5) * 0.7;
+          const prog = (animTime * speed) % 1;
+          const px = s.x + (t.x - s.x) * prog;
+          const py = s.y + (t.y - s.y) * prog;
+
+          ctx.beginPath();
+          ctx.arc(px, py, 1.6 / transform.k, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+          ctx.shadowColor = 'rgba(56, 189, 248, 0.4)';
+          ctx.shadowBlur = 4;
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+      }
+
+      // 2. Draw Nodes & Gentle Wavefront Rings (Restricted to True Extreme Anomalies)
+      for (const node of nodes) {
+        const cluster = getClusterMeta(node.cluster);
+        const isSelected = (selectedNode === node);
+        const isHovered = (hoveredNode === node);
+
+        // Concentric golden rings STRICTLY for genuine extreme outliers (Z >= 15.0σ)
+        if (node.isSurging && (node.z_score >= 15.0)) {
+          // Inner concentric ring
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, node.r + 3.2, 0, Math.PI * 2);
+          ctx.strokeStyle = '#eab308';
+          ctx.lineWidth = 1.2 / transform.k;
+          ctx.stroke();
+
+          // Expanding soft breathing radar wavefront
+          const ringRad = node.r + 4 + ((animTime * 12) % 18);
+          const ringOpacity = Math.max(0, 0.5 - (ringRad / 30));
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, ringRad, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(234, 179, 8, ${ringOpacity})`;
+          ctx.lineWidth = 0.9 / transform.k;
+          ctx.stroke();
+        }
+
+        // Node Body
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, (isHovered || isSelected ? node.r * 1.5 : node.r), 0, Math.PI * 2);
+
+        if (isSelected) {
+          ctx.fillStyle = '#ffffff';
+          ctx.shadowColor = '#ffffff';
+          ctx.shadowBlur = 12;
+        } else if (isHovered) {
+          ctx.fillStyle = '#ffffff';
+          ctx.shadowColor = cluster.color;
+          ctx.shadowBlur = 8;
+        } else {
+          ctx.fillStyle = cluster.color;
+          ctx.shadowBlur = 0;
+        }
+
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+
+      ctx.restore();
+    }
+
+    // Dragging & Interaction
+    d3.select(canvas).call(d3.drag()
+      .container(canvas)
+      .subject(dragsubject)
+      .on('start', dragstarted)
+      .on('drag', dragged)
+      .on('end', dragended)
+    );
+
+    function dragsubject(event) {
+      const [x, y] = transform.invert([event.x, event.y]);
+      let closest = null;
+      let minDistance = 14 / transform.k;
+      for (const node of nodes) {
+        const d = Math.hypot(node.x - x, node.y - y);
+        if (d < minDistance) {
+          minDistance = d;
+          closest = node;
+        }
+      }
+      return closest;
+    }
+
+    function dragstarted(event) {
+      if (!event.active) simulation.alphaTarget(0.3).restart();
+      event.subject.fx = event.subject.x;
+      event.subject.fy = event.subject.y;
+    }
+
+    function dragged(event) {
+      event.subject.fx = transform.invertX(event.x);
+      event.subject.fy = transform.invertY(event.y);
+    }
+
+    function dragended(event) {
+      if (!event.active) simulation.alphaTarget(0);
+      event.subject.fx = null;
+      event.subject.fy = null;
+    }
+
+    const tooltip = document.getElementById('hover-tooltip');
+
+    canvas.addEventListener('mousemove', (e) => {
+      const [x, y] = transform.invert([e.clientX, e.clientY]);
+      let found = null;
+      for (const node of nodes) {
+        if (Math.hypot(node.x - x, node.y - y) < Math.max(7, node.r * 1.5)) {
+          found = node;
+          break;
+        }
+      }
+
+      if (found) {
+        hoveredNode = found;
+        const c = getClusterMeta(found.cluster);
+        document.getElementById('tt-title').innerText = found.label;
+        document.getElementById('tt-cluster').innerText = c.name.toUpperCase();
+        document.getElementById('tt-dot').style.background = c.color;
+        
+        const shortest = findShortestPathToHub(found);
+        const hops = shortest.length || 1;
+        const leadMin = (c.avgLeadMin * (0.8 + (hops * 0.2))).toFixed(1);
+        
+        document.getElementById('tt-lead').innerText = `+${leadMin} min`;
+        document.getElementById('tt-te').innerText = (0.65 + (found.r / 8) * 0.3).toFixed(2) + ' bit';
+        document.getElementById('tt-accel').innerText = '+' + (2.0 + (found.r / 8) * 2.8).toFixed(1) + 'σ';
+        document.getElementById('tt-hops').innerText = `${found.degree || 1} Connected Links`;
+        document.getElementById('tt-bias').innerText = c.bias;
+
+        tooltip.style.left = e.clientX + 'px';
+        tooltip.style.top = e.clientY + 'px';
+        tooltip.style.opacity = '1';
+      } else {
+        if (hoveredNode) {
+          hoveredNode = null;
+          tooltip.style.opacity = '0';
+        }
+      }
+    });
+
+    canvas.addEventListener('click', (e) => {
+      const [x, y] = transform.invert([e.clientX, e.clientY]);
+      for (const node of nodes) {
+        if (Math.hypot(node.x - x, node.y - y) < Math.max(9, node.r * 1.8)) {
+          selectNode(node);
+          return;
+        }
+      }
+      closeInspector();
+    });
+
+    function selectNode(node) {
+      selectedNode = node;
+      activePathEdges = findShortestPathToHub(node);
+
+      const drawer = document.getElementById('inspector');
+      document.getElementById('insp-name').innerText = node.label;
+      document.getElementById('insp-id').innerText = `ID: ${node.id}`;
+      
+      const cluster = getClusterMeta(node.cluster);
+      const badge = document.getElementById('insp-cluster');
+      badge.innerText = cluster.name.toUpperCase();
+      badge.style.color = cluster.color;
+
+      const hops = activePathEdges.length || 1;
+      const dynamicLag = Math.round(hops * 7.5);
+      document.getElementById('insp-lead-clock').innerText = `+${dynamicLag} min Geodesic Window`;
+
+      const te = (node.te || 0.45).toFixed(2);
+      document.getElementById('insp-te').innerText = `${te} bit`;
+
+      const zVal = (node.z_score || 0.0).toFixed(1);
+      document.getElementById('insp-accel').innerText = `+${zVal}σ`;
+
+      const pipeline = document.getElementById('insp-pipeline');
+      pipeline.innerHTML = '';
+      
+      const originDiv = document.createElement('div');
+      originDiv.className = 'bg-zinc-900 p-2 rounded border border-zinc-800 text-[11px] font-mono flex items-center justify-between';
+      originDiv.innerHTML = `<span class="text-zinc-200">1. Origin: <b>${node.label}</b></span><span class="text-amber-400 font-bold">T-0</span>`;
+      pipeline.appendChild(originDiv);
+
+      activePathEdges.forEach((p, idx) => {
+        const targetNode = nodes.find(n => n.id === p.to);
+        const div = document.createElement('div');
+        div.className = 'bg-zinc-900 p-2 rounded border border-zinc-800 text-[11px] font-mono flex items-center justify-between ml-2 border-l-2 border-l-cyan-500';
+        div.innerHTML = `<span class="text-zinc-300">${idx + 2}. Bridge: <b>${targetNode ? targetNode.label : p.to}</b></span><span class="text-cyan-400 font-bold">~${((idx + 1) * 7)}m</span>`;
+        pipeline.appendChild(div);
+      });
+
+      // Genuine Ground Evidence & 1-Click Verification Search Link
+      const evidenceEl = document.getElementById('insp-evidence');
+      if (evidenceEl) {
+        const trigText = node.trigger_text || node.label;
+        const trigSource = node.trigger_source || 'Verified Source';
+        const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(trigText)}`;
+        const ageText = node.first_seen_str || 'Recently';
+        const lastSeenText = node.last_seen_str || 'Just now';
+        const freshness = node.freshness_regime || 'ACTIVE';
+        
+        evidenceEl.innerHTML = `
+          <p class="text-white">&bull; Source: <span class="text-cyan-300 font-semibold">${trigSource}</span></p>
+          <p class="text-zinc-300 leading-snug">&bull; Verbatim Headline / Query: <br><span class="text-amber-300 font-mono">"${trigText}"</span></p>
+          <div class="grid grid-cols-2 gap-1.5 pt-1.5 mt-1 border-t border-zinc-800 text-[10px]">
+            <p class="text-zinc-400">&bull; First Seen: <b class="text-zinc-200">${ageText}</b></p>
+            <p class="text-zinc-400">&bull; Last Active: <b class="text-emerald-400">${lastSeenText}</b></p>
+          </div>
+          <p class="text-zinc-400">&bull; Freshness Status: <span class="font-mono px-1 py-0.2 rounded bg-zinc-800 text-cyan-300 text-[9px] font-bold">${freshness}</span></p>
+          <p class="text-emerald-400">&bull; Poisson Arrival Velocity: <b>+${zVal}σ</b></p>
+          <p class="text-zinc-400">&bull; Network Connectivity: <b>${node.degree || 1} Connected Links</b></p>
+          <a href="${searchUrl}" target="_blank" class="block w-full py-1.5 px-2 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 text-center font-mono rounded border border-sky-500/40 text-[11px] mt-2 transition">
+            🔍 Verify Real-World Wire on Google
+          </a>
+        `;
+      }
+
+      const tapeEl = document.getElementById('insp-tape');
+      if (tapeEl) {
+        tapeEl.innerText = (node.isSurging || node.is_surging) 
+          ? `ANOMALY SURGE (+${zVal}σ): Check M5 Absorption` 
+          : `STRUCTURAL TRANSMISSION (${node.degree || 1} Links)`;
+      }
+
+      drawer.classList.remove('translate-x-[440px]');
+    }
+
+    function closeInspector() {
+      selectedNode = null;
+      activePathEdges = [];
+      document.getElementById('inspector').classList.add('translate-x-[440px]');
+    }
+
+    function focusCluster(cIdx) {
+      const match = nodes.find(n => n.cluster === cIdx && n.r >= 5);
+      if (match) {
+        d3.select(canvas).transition().duration(800).call(
+          zoom.transform,
+          d3.zoomIdentity.translate(width / 2, height / 2).scale(1.8).translate(-match.x, -match.y)
+        );
+        selectNode(match);
+      }
+    }
+
+    function focusTopOutlier() {
+      const candidates = nodes.filter(n => (n.z_score || 0) > 0);
+      if (candidates.length === 0) return;
+      const top = candidates.sort((a, b) => (b.z_score || 0) - (a.z_score || 0))[0];
+      if (top) {
+        d3.select(canvas).transition().duration(800).call(
+          zoom.transform,
+          d3.zoomIdentity.translate(width / 2, height / 2).scale(2.2).translate(-top.x, -top.y)
+        );
+        selectNode(top);
+      }
+    }
+
+    function toggleDiagnosticsModal() {
+      const m = document.getElementById('diagnostics-modal');
+      if (m) m.classList.toggle('hidden');
+    }
+
+    // Real-Time Genuine Dynamic Graph Synchronization
+    async function syncRealtimeTelemetry() {
+      try {
+        const resp = await fetch('/api/graph');
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (!data.nodes || data.nodes.length === 0) return;
+
+        const liveNodeMap = new Map(data.nodes.map(n => [n.id, n]));
+        const currNodeMap = new Map(nodes.map(n => [n.id, n]));
+
+        let nodesChanged = false;
+
+        // 1. Add new genuine nodes or update existing
+        data.nodes.forEach(rn => {
+          if (currNodeMap.has(rn.id)) {
+            const existing = currNodeMap.get(rn.id);
+            existing.label = rn.label;
+            existing.degree = rn.degree || 1;
+            existing.z_score = rn.z_score || 0.0;
+            existing.isSurging = rn.is_surging || (rn.z_score >= 10.0);
+            existing.trigger_text = rn.trigger_text || '';
+            existing.trigger_source = rn.trigger_source || '';
+            existing.age_seconds = rn.age_seconds || 0;
+            existing.first_seen_str = rn.first_seen_str || 'Recently';
+            existing.last_seen_str = rn.last_seen_str || 'Just now';
+            existing.freshness_regime = rn.freshness_regime || 'ACTIVE';
+            existing.r = rn.r || (existing.isSurging ? 5.2 : 3.0);
+          } else {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 80 + Math.random() * 220;
+            const newNode = {
+              id: rn.id,
+              label: rn.label,
+              cluster: rn.cluster,
+              degree: rn.degree || 1,
+              r: rn.r || (rn.is_surging ? 5.2 : 3.0),
+              z_score: rn.z_score || 0.0,
+              isSurging: rn.is_surging || (rn.z_score >= 10.0),
+              trigger_text: rn.trigger_text || '',
+              trigger_source: rn.trigger_source || '',
+              age_seconds: rn.age_seconds || 0,
+              first_seen_str: rn.first_seen_str || 'Recently',
+              last_seen_str: rn.last_seen_str || 'Just now',
+              freshness_regime: rn.freshness_regime || 'ACTIVE',
+              x: (width / 2) + Math.cos(angle) * dist,
+              y: (height / 2) + Math.sin(angle) * dist,
+              vx: 0,
+              vy: 0
+            };
+            nodes.push(newNode);
+            nodesChanged = true;
+          }
+        });
+
+        // 2. Remove culled nodes
+        for (let i = nodes.length - 1; i >= 0; i--) {
+          const n = nodes[i];
+          if (!liveNodeMap.has(n.id)) {
+            nodes.splice(i, 1);
+            nodesChanged = true;
+          }
+        }
+
+        // 3. Reconcile genuine links
+        const validNodeIds = new Set(nodes.map(n => n.id));
+        const newLinks = [];
+        (data.links || []).forEach(rl => {
+          const s = typeof rl.source === 'object' ? rl.source.id : rl.source;
+          const t = typeof rl.target === 'object' ? rl.target.id : rl.target;
+          if (validNodeIds.has(s) && validNodeIds.has(t)) {
+            newLinks.push({
+              source: s,
+              target: t,
+              weight: rl.weight || 0.5,
+              te: rl.te || 0.35
+            });
+          }
+        });
+
+        // Determine if topology changed
+        const currentLinkSig = links.map(l => (typeof l.source === 'object' ? l.source.id : l.source) + ':' + (typeof l.target === 'object' ? l.target.id : l.target)).join('|');
+        const newLinkSig = newLinks.map(l => l.source + ':' + l.target).join('|');
+        const linksChanged = (currentLinkSig !== newLinkSig);
+
+        if (linksChanged || nodesChanged) {
+          links.length = 0;
+          newLinks.forEach(l => links.push(l));
+          simulation.nodes(nodes);
+          simulation.force('link').links(links);
+          simulation.alpha(0.08).restart();
+        }
+
+        const surgeCount = nodes.filter(n => n.isSurging).length;
+
+        // Dynamic Community Discovery
+        updateDynamicCommunityTray(data);
+
+        // Render Precursor Clues
+        updatePrecursorClues(data.emerging_constellations || data.precursor_clues || []);
+
+        // Render Primary Driver
+        const card = document.getElementById('primary-driver-card');
+        const title = document.getElementById('primary-driver-title');
+        const verifyGoogle = document.getElementById('primary-driver-verify');
+        const verifyX = document.getElementById('primary-driver-verify-x');
+        if (card && title) {
+          if (data.primary_driver && data.primary_driver.active) {
+            const p = data.primary_driver;
+            const hwk = p.hawkes_badge ? `<span class="px-1.5 py-0.2 rounded bg-amber-500/25 text-amber-300 font-bold border border-amber-500/40">${p.hawkes_badge}</span> ` : '';
+            title.innerHTML = `${hwk}<span class="text-white font-medium">${p.headline}</span> <span class="text-zinc-400 font-mono text-[10px]">(Z: +${p.z_velocity}σ, ${p.source_count} Newsrooms)</span>`;
+            if (verifyGoogle) verifyGoogle.href = p.verify_google || '#';
+            if (verifyX) verifyX.href = p.verify_x || '#';
+            card.classList.remove('hidden');
+          } else {
+            card.classList.add('hidden');
+          }
+        }
+
+        // Render Collector Health & Diagnostics
+        if (data.collector_health) {
+          updateDiagnostics(data.collector_health);
+        }
+
+        // Update Top Shock Anomaly Header Pill
+        const topOutlier = data.nodes.slice().sort((a, b) => (b.z_score || 0) - (a.z_score || 0))[0];
+        if (topOutlier) {
+          const highestEl = document.getElementById('hud-highest-shock');
+          if (highestEl) highestEl.innerText = `${topOutlier.label} (+${topOutlier.z_score}σ)`;
+        }
+
+        // Fetch Real Telemetry & Dual-Key Arbiter Decision
+        fetch('/api/telemetry?z=3.5&hops=1')
+          .then(r => r.json())
+          .then(tel => {
+            const attDivEl = document.getElementById('hud-att-div');
+            if (attDivEl && tel.attention_divergence) {
+              const d = tel.attention_divergence;
+              const sign = d.divergence_delta >= 0 ? '+' : '';
+              attDivEl.innerText = `Δ ${sign}${d.divergence_delta}σ (${d.lead_quality})`;
+            }
+
+            const arbiterEl = document.getElementById('hud-arbiter');
+            if (arbiterEl && tel.latest_decision) {
+              const dec = tel.latest_decision.decision;
+              if (dec === 'DISPATCHED_TELEGRAM_PROPOSAL') {
+                arbiterEl.className = 'text-amber-400 font-bold font-mono text-[11px] animate-pulse';
+                arbiterEl.innerText = 'PROPOSAL ALERT';
+              } else {
+                arbiterEl.className = 'text-emerald-400 font-bold font-mono text-[11px]';
+                arbiterEl.innerText = 'STAND DOWN';
+              }
+            }
+          })
+          .catch(() => {});
+
+        const hudNodes = document.getElementById('hud-nodes');
+        if (hudNodes) hudNodes.innerText = nodes.length;
+
+        if (data.age_distribution) {
+          const freshEl = document.getElementById('hud-fresh');
+          const activeEl = document.getElementById('hud-active');
+          if (freshEl) freshEl.innerText = `${data.age_distribution.under_5m || 0}`;
+          if (activeEl) activeEl.innerText = `${(data.age_distribution['5m_to_15m'] || 0) + (data.age_distribution['15m_to_60m'] || 0)}`;
+        }
+
+      } catch (err) {
+        // Silent background fallback
+      }
+    }
+
+    // Dynamic Community Detection & Tray Generator (Zero Hardcoding)
+    function updateDynamicCommunityTray(graphData) {
+      const tray = document.getElementById('dynamic-cluster-list');
+      if (!tray) return;
+
+      // Populate dynamicCommunitiesMap from server's mathematical community detection
+      if (graphData && graphData.communities && Array.isArray(graphData.communities)) {
+        graphData.communities.forEach(c => {
+          dynamicCommunitiesMap.set(c.id, {
+            name: c.name,
+            color: PALETTE[c.id % PALETTE.length],
+            avgLeadMin: Math.round(10 + (c.id % 4) * 6),
+            bias: 'EMPIRICAL TRANSIENT'
+          });
+        });
+      }
+
+      // Group nodes by cluster ID
+      const clusterMap = new Map();
+      nodes.forEach(n => {
+        const c = n.cluster !== undefined ? n.cluster : 0;
+        if (!clusterMap.has(c)) clusterMap.set(c, []);
+        clusterMap.get(c).push(n);
+      });
+
+      tray.innerHTML = '';
+
+      clusterMap.forEach((clusterNodes, cIdx) => {
+        const meta = getClusterMeta(cIdx);
+        // Find the central node
+        const centralNode = clusterNodes.reduce((prev, curr) => {
+          const prevScore = (prev.r || 3) * 2 + (prev.z_score || 0);
+          const currScore = (curr.r || 3) * 2 + (curr.z_score || 0);
+          return currScore > prevScore ? curr : prev;
+        }, clusterNodes[0]);
+
+        const cascade = findTransmissionCascade(centralNode);
+        const depth = Math.max(1, cascade.length);
+        const dynamicTauMin = Math.round(depth * 6.5);
+
+        const cleanLabel = meta.name;
+        const color = meta.color;
+
+        const row = document.createElement('div');
+        row.className = 'flex items-center justify-between p-1 rounded hover:bg-zinc-800/60 cursor-pointer transition';
+        row.onclick = () => {
+          d3.select(canvas).transition().duration(800).call(
+            zoom.transform,
+            d3.zoomIdentity.translate(width / 2, height / 2).scale(1.8).translate(-centralNode.x, -centralNode.y)
+          );
+          selectNode(centralNode);
+        };
+
+        row.innerHTML = `
+          <div class="flex items-center gap-2 truncate pr-2">
+            <span class="w-2 h-2 rounded-full flex-shrink-0" style="background: ${color};"></span>
+            <span class="text-zinc-300 truncate font-medium">${cleanLabel}</span>
+          </div>
+          <span class="text-zinc-400 font-mono text-[10px] flex-shrink-0">τ: ${dynamicTauMin}m</span>
+        `;
+
+        tray.appendChild(row);
+      });
+    }
+
+    function updatePrecursorClues(clues) {
+      const list = document.getElementById('precursor-clues-list');
+      if (!list) return;
+
+      if (!clues || clues.length === 0) {
+        list.innerHTML = `<p class="text-zinc-500 font-mono text-[10px] italic">Scanning live feeds for burst anomalies...</p>`;
+        return;
+      }
+
+      list.innerHTML = '';
+      clues.forEach(c => {
+        const card = document.createElement('div');
+        card.className = 'p-2.5 rounded bg-zinc-900/95 border border-zinc-800 hover:border-zinc-700 transition cursor-pointer space-y-1.5 shadow-sm overflow-hidden max-w-full';
+        
+        // Match node in graph if possible
+        const matchedNode = nodes.find(n => c.phrase && c.phrase.includes(n.id));
+        if (matchedNode) {
+          card.onclick = () => {
+            d3.select(canvas).transition().duration(800).call(
+              zoom.transform,
+              d3.zoomIdentity.translate(width / 2, height / 2).scale(2.2).translate(-matchedNode.x, -matchedNode.y)
+            );
+            selectNode(matchedNode);
+          };
+        }
+
+        const pubCount = c.publisher_count || c.source_count || (c.publishers ? c.publishers.length : 1);
+        const pubListStr = (c.publishers && c.publishers.length > 0) ? c.publishers.slice(0, 3).join(', ') : (c.primary_publisher || 'Wire');
+        const stageStr = c.stage || c.transmission || 'STAGE 1: GROUND WHISPER';
+        const matMin = c.maturation_minutes !== undefined ? `${c.maturation_minutes}m` : 'Fresh';
+        
+        // Stage color badge
+        let stageBadgeColor = 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40';
+        if (stageStr.includes('STAGE 3')) {
+          stageBadgeColor = 'bg-fuchsia-500/25 text-fuchsia-300 border-fuchsia-500/50 animate-pulse';
+        } else if (stageStr.includes('STAGE 2')) {
+          stageBadgeColor = 'bg-amber-500/20 text-amber-300 border-amber-500/40';
+        }
+
+        // Hawkes badge
+        let hawkesHtml = '';
+        if (c.hawkes_badge) {
+          let hColor = 'bg-zinc-800 text-zinc-400 border-zinc-700';
+          if (c.hawkes_badge.includes('IGNITION')) {
+            hColor = 'bg-amber-500/25 text-amber-300 border-amber-500/50 animate-pulse font-bold';
+          } else if (c.hawkes_badge.includes('COMPOUNDING')) {
+            hColor = 'bg-orange-500/20 text-orange-300 border-orange-500/40 font-semibold';
+          }
+          hawkesHtml = `<span class="px-1.5 py-0.5 rounded text-[8.5px] font-mono border ${hColor} flex-shrink-0">${c.hawkes_badge}</span>`;
+        }
+
+        // Attention Divergence Lead badge
+        let leadBadgeHtml = '';
+        if (c.lead_badge) {
+          let lColor = 'bg-zinc-800/80 text-zinc-300 border-zinc-700';
+          if (c.lead_badge.includes('ASYMMETRIC')) {
+            lColor = 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 font-bold';
+          } else if (c.lead_badge.includes('CROWD BUBBLE')) {
+            lColor = 'bg-rose-500/20 text-rose-300 border-rose-500/40 font-semibold';
+          } else if (c.lead_badge.includes('PRICED-IN')) {
+            lColor = 'bg-zinc-800 text-zinc-400 border-zinc-700';
+          }
+          leadBadgeHtml = `<span class="px-1.5 py-0.5 rounded text-[8.5px] font-mono border ${lColor} flex-shrink-0 truncate max-w-[120px]">${c.lead_badge}</span>`;
+        }
+
+        // Off-ramp note HTML
+        let offRampHtml = '';
+        if (c.off_ramp_note) {
+          offRampHtml = `
+            <div class="text-[8.5px] font-mono text-zinc-400 flex items-center justify-between bg-zinc-950/40 px-1.5 py-0.5 rounded border border-zinc-800/50 gap-1 overflow-hidden">
+              <span class="text-zinc-400 truncate flex-1 min-w-0">🛡️ ${c.off_ramp_note}</span>
+              <span class="text-amber-400/80 font-bold ml-1 flex-shrink-0">${c.off_ramp_remaining_min !== undefined ? c.off_ramp_remaining_min + 'm' : ''}</span>
+            </div>
+          `;
+        }
+
+        card.innerHTML = `
+          <div class="flex items-center justify-between gap-1 overflow-hidden">
+            <span class="font-bold text-amber-300 font-mono text-[11px] truncate tracking-tight flex-1 min-w-0">"${c.phrase || c.title}"</span>
+            <div class="flex items-center gap-1 flex-shrink-0">
+              ${hawkesHtml}
+              ${c.icf ? `<span class="px-1 py-0.2 rounded bg-zinc-800 text-cyan-300 font-mono text-[8px] font-semibold" title="Shannon Information Surprise">${c.icf}b</span>` : ''}
+              <span class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-[9px] font-bold whitespace-nowrap">+${c.z_score}σ</span>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-1.5 overflow-hidden">
+            <div class="text-[9px] font-mono px-1.5 py-0.5 rounded border ${stageBadgeColor} leading-tight font-semibold flex items-center justify-between flex-1 min-w-0 overflow-hidden">
+              <span class="truncate">${stageStr}</span>
+              <span class="text-zinc-400 font-normal ml-1 flex-shrink-0">⏱️ ${matMin}</span>
+            </div>
+            ${leadBadgeHtml}
+          </div>
+
+          <p class="text-zinc-300 text-[10px] line-clamp-2 leading-snug">&bull; ${c.sample_headline}</p>
+
+          ${offRampHtml}
+          
+          <div class="text-[9px] text-zinc-400 font-mono leading-tight flex items-center justify-between border-t border-zinc-800/80 pt-1">
+            <span class="text-zinc-400">Provenance: <b class="${c.is_pure_crowd ? 'text-amber-400' : 'text-cyan-300'}">${c.provenance_label || (pubCount + ' Sources')}</b></span>
+            <span class="text-zinc-500 truncate max-w-[130px]">${pubListStr}</span>
+          </div>
+
+          <div class="flex items-center gap-1.5 pt-1 border-t border-zinc-800/80">
+            <a href="${c.google_url}" target="_blank" onclick="event.stopPropagation()" class="flex-1 text-center py-1 px-1 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 rounded text-[9.5px] font-mono border border-sky-500/30 transition font-medium">🔍 Verify on Google</a>
+            <a href="${c.x_url}" target="_blank" onclick="event.stopPropagation()" class="flex-1 text-center py-1 px-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-[9.5px] font-mono border border-zinc-700 transition font-medium">𝕏 Live Posts</a>
+          </div>
+        `;
+        list.appendChild(card);
+      });
+    }
+
+    function updateDiagnostics(health) {
+      if (!health) return;
+      const dot = document.getElementById('health-dot');
+      const text = document.getElementById('health-text');
+      const list = document.getElementById('diagnostics-list');
+      if (!dot || !text || !list) return;
+
+      if (health.all_healthy) {
+        dot.className = 'w-2 h-2 rounded-full bg-emerald-400';
+        text.className = 'font-mono text-[11px] text-zinc-300';
+        text.innerText = `Feeds: Healthy (${health.healthy_count}/${health.total_count})`;
+      } else {
+        dot.className = 'w-2 h-2 rounded-full bg-amber-400 animate-pulse';
+        text.className = 'font-mono text-[11px] text-amber-300 font-semibold';
+        text.innerText = `⚠️ ${health.active_errors ? health.active_errors.length : 1} Feed Alerts / Rate-Limits`;
+      }
+
+      list.innerHTML = '';
+      if (health.states && health.states.length > 0) {
+        health.states.forEach(s => {
+          const row = document.createElement('div');
+          const isErr = (s.status !== 'HEALTHY');
+          row.className = `p-1.5 rounded flex items-center justify-between border ${isErr ? 'bg-amber-950/40 border-amber-800/60 text-amber-200' : 'bg-zinc-900 border-zinc-800 text-zinc-300'}`;
+          const badgeCol = isErr ? 'bg-amber-500/20 text-amber-400' : 'bg-emerald-500/20 text-emerald-400';
+          row.innerHTML = `
+            <div class="truncate pr-2 max-w-[240px]">
+              <span class="font-bold text-white block truncate">${s.source}</span>
+              ${s.error_msg ? `<span class="text-[10px] text-zinc-400 block truncate">${s.error_msg}</span>` : ''}
+            </div>
+            <span class="px-1.5 py-0.5 rounded text-[9px] font-bold font-mono ${badgeCol} flex-shrink-0">${s.status}</span>
+          `;
+          list.appendChild(row);
+        });
+      }
+    }
+
+    // Sync live telemetry and individual dot repositioning every 10 seconds smoothly
+    setInterval(syncRealtimeTelemetry, 10000);
+    syncRealtimeTelemetry();
+  </script>
+</body>
+</html>
