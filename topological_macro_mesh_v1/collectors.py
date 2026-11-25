@@ -204,8 +204,8 @@ class DataCollector:
         wires.extend(self.fetch_rss_items("http://feeds.bbci.co.uk/news/world/rss.xml", "BBC World Breaking", max_items=8))
         # France 24 International - tier-1 open world wire
         wires.extend(self.fetch_rss_items("https://www.france24.com/en/rss", "France 24 International", max_items=8))
-        # Google News World Geopolitics (cached 120s TTL to prevent 429)
-        wires.extend(self.fetch_rss_items("https://news.google.com/rss/headlines/section/topic/WORLD", "Global Geopolitics", max_items=8, ttl_seconds=120.0))
+        # Google News World Geopolitics (US/Global Edition, cached 120s TTL)
+        wires.extend(self.fetch_rss_items("https://news.google.com/rss/headlines/section/topic/WORLD?hl=en-US&gl=US&ceid=US:en", "Global Geopolitics", max_items=8, ttl_seconds=120.0))
         # Google News Real-time 1-hour Breaking Conflict & Macro Shock Search (cached 120s TTL)
         wires.extend(self.fetch_rss_items(
             "https://news.google.com/rss/search?q=when:1h+(gold+OR+dollar+OR+yields+OR+treasury+OR+strike+OR+iran+OR+ukraine+OR+tariffs+OR+fed+OR+inflation+OR+debt+OR+crude+OR+opec)&hl=en-US&gl=US&ceid=US:en",
@@ -229,8 +229,8 @@ class DataCollector:
         
         # MarketWatch Top Stories (Official Dow Jones Feed)
         items.extend(self.fetch_rss_items("https://feeds.content.dowjones.io/public/rss/mw_topstories", "MarketWatch Wire", max_items=6))
-        # Google Business Macro (cached 120s TTL to prevent 429)
-        items.extend(self.fetch_rss_items("https://news.google.com/rss/headlines/section/topic/BUSINESS", "Global Business Wire", max_items=8, ttl_seconds=120.0))
+        # Google Business Macro (US/Global Edition, cached 120s TTL)
+        items.extend(self.fetch_rss_items("https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-US&gl=US&ceid=US:en", "Global Business Wire", max_items=8, ttl_seconds=120.0))
         return items
 
     def fetch_wikipedia_crowd_pageviews(self, dynamic_topics: List[str] = None) -> List[Dict[str, str]]:
