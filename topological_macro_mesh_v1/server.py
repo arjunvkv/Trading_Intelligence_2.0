@@ -107,9 +107,9 @@ def get_api_catalog(base_url: str) -> dict:
                 "path": "/api/nodes",
                 "method": "GET",
                 "name": "Single Nodes Granular Stream",
-                "description": "Stream of all individual entity nodes in the global graph with entity ID, burst Z-score, degree, hops to dominant sovereign macro hub, verbatim wire headline, full publisher provenance list, age, and 1-click Google/X verification links.",
+                "description": "Stream of all individual entity nodes in the global graph with entity ID, burst Z-score, degree, verbatim wire headline, full publisher provenance list, age, and 1-click Google/X verification links.",
                 "parameters": {
-                    "sort": "Sort field: 'z' (highest burst velocity), 'fresh' (newest arrival), 'hops' (closest geodesic distance to dominant macro hub), 'publishers' (most newsrooms reporting). Default: 'z'.",
+                    "sort": "Sort field: 'z' (highest burst velocity), 'fresh' (newest arrival), 'degree' (most connected links), 'publishers' (most newsrooms reporting). Default: 'z'.",
                     "min_z": "Filter nodes with minimum Poisson arrival Z-score (e.g. min_z=2.5).",
                     "q": "Search keyword or entity across IDs, labels, and verbatim headlines (e.g. q=dollar, q=iran, q=fed).",
                     "limit": "Maximum number of nodes to return (e.g. limit=25)."
@@ -134,7 +134,7 @@ def get_api_catalog(base_url: str) -> dict:
                 "parameters": {
                     "cluster": "Realm cluster name (default: 'Sovereign & Central Banks')",
                     "z": "Surge outlier threshold (default: 3.0)",
-                    "hops": "Geodesic hops to dominant hub (default: 2)"
+                    "hops": "Network cascade depth (default: 2)"
                 },
                 "example_url": f"{base_url}/api/telemetry?cluster=Sovereign+%26+Central+Banks&z=3.5&hops=1",
                 "curl_example": f"curl -k -s '{base_url}/api/telemetry?cluster=Sovereign+%26+Central+Banks&z=3.5&hops=1'"
@@ -369,8 +369,8 @@ class MeshHTTPHandler(http.server.SimpleHTTPRequestHandler):
                 all_nodes.sort(key=lambda n: n.get('z_score', 0), reverse=True)
             elif sort_by == 'fresh':
                 all_nodes.sort(key=lambda n: n.get('age_seconds', 999999))
-            elif sort_by == 'hops':
-                all_nodes.sort(key=lambda n: n.get('hops_to_hub', n.get('hops_to_xau', 999)))
+            elif sort_by in ['degree', 'hops']:
+                all_nodes.sort(key=lambda n: n.get('degree', 0), reverse=True)
             elif sort_by == 'publishers':
                 all_nodes.sort(key=lambda n: n.get('publisher_count', 0), reverse=True)
 

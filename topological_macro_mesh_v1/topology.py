@@ -219,7 +219,7 @@ class TopologyEngine:
                 surprisal = max(0.5, -math.log2(p_t))
                 info_energy = round(surprisal * max(0.0, z), 2)
 
-                label = publisher.split()[0] + ": " + t.capitalize()
+                label = t.replace('_', ' ').title()
                 
                 # ONLY refresh last_seen if this is a new item, or if node doesn't exist yet!
                 existing_last_seen = self.nodes[t]["last_seen"] if t in self.nodes else now
@@ -276,51 +276,48 @@ class TopologyEngine:
                         self.edges[key]["te"] = dynamic_te
                         self.edges[key]["last_seen"] = now
 
-    def find_shortest_causal_path(self, start_token: str, target: str = None) -> Tuple[List[str], float]:
+    def find_causal_cascade(self, start_token: str, max_depth: int = 4, target: str = None) -> Tuple[List[str], float]:
         """
-        Dijkstra's Algorithm over Transfer Entropy / Edge Weights to find the true
-        mathematical transmission pipeline from an emerging entity to the dominant sovereign macro hub.
+        Follows maximal transfer entropy and edge weight propagation through the network
+        to trace the organic transmission cascade of an emerging entity.
+        Zero hardcoded target hubs.
         """
         if not self.nodes or start_token not in self.nodes:
             return ([start_token], 0.0)
 
-        if target is None:
-            # Organically identify the dominant sovereign macro hub by connectivity and multi-publisher corroboration
-            target = max(
-                self.nodes.keys(),
-                key=lambda n: (self.token_mentions.get(n, 1) * math.sqrt(len(self.token_publishers.get(n, []))))
-            )
+        path = [start_token]
+        curr = start_token
+        visited = {start_token}
+        total_weight = 0.0
 
-        if not target or target not in self.nodes:
-            return ([start_token], 0.0)
+        for _ in range(max_depth - 1):
+            best_nbr = None
+            best_score = -1.0
+            for (src, tgt), ed in self.edges.items():
+                nbr = None
+                if src == curr and tgt not in visited and tgt in self.nodes:
+                    nbr = tgt
+                elif tgt == curr and src not in visited and src in self.nodes:
+                    nbr = src
+                if nbr:
+                    score = ed.get("weight", 0.5) * ed.get("te", 0.35)
+                    if score > best_score:
+                        best_score = score
+                        best_nbr = nbr
 
-        if start_token == target:
-            return ([start_token], 1.0)
+            if best_nbr is None or best_score < 0.05:
+                break
 
-        adj = defaultdict(dict)
-        for (src, tgt), ed in self.edges.items():
-            w = ed.get("weight", 0.5)
-            # Cost is inverse of weight: high weight = low resistance transmission path
-            cost = 1.0 / max(0.05, w)
-            adj[src][tgt] = cost
-            adj[tgt][src] = cost
+            path.append(best_nbr)
+            visited.add(best_nbr)
+            total_weight += best_score
+            curr = best_nbr
 
-        pq = [(0.0, start_token, [start_token])]
-        visited = set()
+        avg_weight = round(total_weight / max(1, len(path) - 1), 2) if len(path) > 1 else 1.0
+        return (path, avg_weight)
 
-        while pq:
-            cost, curr, path = heapq.heappop(pq)
-            if curr == target:
-                avg_weight = len(path) / max(1e-4, cost)
-                return (path, round(avg_weight, 2))
-            if curr in visited:
-                continue
-            visited.add(curr)
-            for nbr, edge_cost in adj[curr].items():
-                if nbr not in visited and len(path) < 6: # max 5 hops
-                    heapq.heappush(pq, (cost + edge_cost, nbr, path + [nbr]))
-
-        return ([start_token], 0.0)
+    # Alias for backwards compatibility
+    find_shortest_causal_path = find_causal_cascade
 
     def _discover_communities(self) -> Tuple[Dict[int, List[str]], Dict[int, Dict[str, Any]]]:
         """
@@ -603,7 +600,7 @@ class TopologyEngine:
 
         return deduped
 
-    def _compute_graph_topology(self) -> Tuple[Dict[str, int], Dict[str, int], Dict[str, List[str]], Optional[str]]:
+    def _compute_graph_topology(self) -> Tuple[Dict[str, int], Dict[str, List[str]]]:
         adj = defaultdict(set)
         for (src, tgt) in self.edges.keys():
             if src in self.nodes and tgt in self.nodes:
@@ -611,30 +608,6 @@ class TopologyEngine:
                 adj[tgt].add(src)
 
         degrees = {nid: len(adj[nid]) for nid in self.nodes}
-
-        # Dynamic sovereign macro hub: highest degree node corroborated across publishers
-        dominant_hub = None
-        if self.nodes:
-            dominant_hub = max(
-                self.nodes.keys(),
-                key=lambda n: (degrees.get(n, 0), len(self.token_publishers.get(n, [])))
-            )
-
-        hops_to_hub = {nid: 999 for nid in self.nodes}
-
-        if dominant_hub:
-            hops_to_hub[dominant_hub] = 0
-            queue = deque([dominant_hub])
-            visited = {dominant_hub}
-
-            while queue:
-                curr = queue.popleft()
-                curr_dist = hops_to_hub[curr]
-                for neighbor in adj[curr]:
-                    if neighbor not in visited:
-                        visited.add(neighbor)
-                        hops_to_hub[neighbor] = curr_dist + 1
-                        queue.append(neighbor)
 
         comp_visited = set()
         components = {}
@@ -654,7 +627,7 @@ class TopologyEngine:
                 components[comp_idx] = comp_members
                 comp_idx += 1
 
-        return degrees, hops_to_hub, components, dominant_hub
+        return degrees, components
 
     def prune_and_decay(self):
         now = time.time()
@@ -680,7 +653,7 @@ class TopologyEngine:
             del self.edges[key]
 
         # 2. Mathematical Reachability & Orphan Culling
-        degrees, hops_to_hub, components, _ = self._compute_graph_topology()
+        degrees, components = self._compute_graph_topology()
 
         cull_nodes = set()
         for nid, data in self.nodes.items():
@@ -745,7 +718,7 @@ class TopologyEngine:
 
     def export_graph_json(self) -> Dict[str, Any]:
         self.prune_and_decay()
-        degrees, hops_to_hub, _, dominant_hub = self._compute_graph_topology()
+        degrees, _ = self._compute_graph_topology()
         communities, community_meta = self._discover_communities()
 
         # Map each node to its dynamic emergent community
@@ -793,7 +766,6 @@ class TopologyEngine:
             # Extract verification and provenance
             pubs = list(self.token_publishers.get(nid, []))
             is_crowd = (self.token_is_crowd.get(nid, False) and not self.token_is_wire.get(nid, False))
-            is_hub = (nid == dominant_hub)
             clean_trigger = self._format_trigger_text(d.get("trigger_text", nid), 220)
             q_google = urllib.parse.quote(clean_trigger[:100])
             q_x = urllib.parse.quote(nid)
@@ -811,8 +783,6 @@ class TopologyEngine:
                 "surprisal": d.get("surprisal", 0.0),
                 "info_energy": d.get("info_energy", 0.0),
                 "is_surging": d.get("is_surging", False),
-                "is_asset": False,
-                "is_hub": is_hub,
                 "is_crowd": is_crowd,
                 "r": node_r,
                 "trigger_text": clean_trigger,
@@ -821,8 +791,6 @@ class TopologyEngine:
                 "publisher_count": len(pubs),
                 "mention_count": self.token_mentions.get(nid, 1),
                 "degree": deg,
-                "hops_to_hub": hops_to_hub.get(nid, 999),
-                "hops_to_xau": hops_to_hub.get(nid, 999),
                 "age_seconds": age_sec,
                 "last_seen_seconds_ago": last_seen_sec,
                 "first_seen_str": first_str,
@@ -895,7 +863,6 @@ class TopologyEngine:
 
         return {
             "timestamp": time.time(),
-            "dominant_hub": dominant_hub,
             "nodes": nodes_out,
             "links": links_out,
             "communities": [

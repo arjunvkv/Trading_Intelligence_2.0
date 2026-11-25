@@ -176,7 +176,7 @@ class LeadArbiter:
                 "inflection_summary": "Retail crowd curiosity; unconfirmed on sovereign institutional wires"
             }
 
-        # 2. Dynamic graph-derived geodesic transmission chain (Dijkstra optimal path to dominant macro hub)
+        # 2. Dynamic graph-derived transmission cascade (maximal transfer entropy path)
         if transmission_path and len(transmission_path) >= 2:
             clean_labels = [t.replace("_", " ").title() for t in transmission_path]
             transmission = " ➔ ".join(clean_labels)
@@ -185,7 +185,7 @@ class LeadArbiter:
             pipeline = f"{transmission_path[0].upper()}_VECTOR"
             inflection_minutes = (max(5, len(transmission_path) * 4), len(transmission_path) * 8 + 10)
             macro_bias = "VOLATILITY_EXPANSION" if len(transmission_path) <= 3 else "STRUCTURAL_DIFFUSION"
-            inflection_summary = f"Expected tape response within {inflection_minutes[0]}-{inflection_minutes[1]} mins ({len(transmission_path)} hops)"
+            inflection_summary = f"Expected systemic response within {inflection_minutes[0]}-{inflection_minutes[1]} mins ({len(transmission_path)} cascade steps)"
         elif transmission_path and len(transmission_path) == 1:
             lead_entity = transmission_path[0].replace("_", " ").title()
             transmission = f"{lead_entity} (Organic community development; dynamic transmission bridge)"
@@ -256,7 +256,7 @@ class LeadArbiter:
         self, 
         cluster_name: str, 
         z_score: float, 
-        hops_to_hub: int = 2,
+        cascade_depth: int = 2,
         wire_z_scores: List[float] = None,
         crowd_z_scores: List[float] = None,
         **kwargs
@@ -265,13 +265,13 @@ class LeadArbiter:
         Evaluates dynamic alpha windows from graph geodesic distance and session conductivity.
         ZERO hardcoded minute tables.
         """
-        effective_hops = kwargs.get("hops_to_xau", hops_to_hub)
+        depth = kwargs.get("hops_to_xau", kwargs.get("hops_to_hub", cascade_depth))
         sess = self.get_active_session_conductivity()
         att_div = self.calculate_attention_divergence(wire_z_scores or [], crowd_z_scores or [])
         
         # Empirical Geodesic Information Diffusion Model
         # Logarithmic saturation curve replacing linear hop magic numbers
-        hops = max(1, effective_hops if effective_hops < 99 else 3)
+        hops = max(1, depth if depth < 99 else 3)
         base_diffusion = 2.5 + (math.log(1.0 + hops) * 6.0)
         adj_min = max(2, round((base_diffusion * 0.65) * sess["lag_multiplier"]))
         adj_max = max(5, round((base_diffusion * 1.75) * sess["lag_multiplier"]))
@@ -292,7 +292,8 @@ class LeadArbiter:
             "market_phase": regime,
             "orderbook_bias": bias,
             "session_conductivity": f"{round(sess['conductivity'] * 100)}% ({sess['session']})",
-            "hops_distance": f"{hops} Hop{'s' if hops != 1 else ''} to Core Hub",
+            "cascade_depth": f"{hops} Cascade Step{'s' if hops != 1 else ''}",
+            "hops_distance": f"{hops} Cascade Step{'s' if hops != 1 else ''}",
             "attention_divergence": att_div
         }
 

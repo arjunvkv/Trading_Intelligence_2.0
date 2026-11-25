@@ -224,7 +224,7 @@
 
       <!-- Active Causal Transmission Pipeline -->
       <div>
-        <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block mb-2">Causal Transmission Path to Core Hub</span>
+        <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block mb-2">Topological Transmission Cascade</span>
         <div id="insp-pipeline" class="space-y-1.5 text-xs">
           <!-- Dynamically populated shortest path hops -->
         </div>
@@ -329,44 +329,36 @@
     }
     requestAnimationFrame(renderCanvas);
 
-    function getDominantHub() {
-      if (!nodes || nodes.length === 0) return null;
-      const flagged = nodes.find(n => n.is_hub);
-      if (flagged) return flagged;
-      return nodes.reduce((maxN, curr) => ((curr.r || 0) > (maxN ? (maxN.r || 0) : -1) ? curr : maxN), null);
-    }
-
-    function findShortestPathToHub(startNode) {
+    function findTransmissionCascade(startNode, maxDepth = 4) {
       if (!startNode) return [];
-      const targetHub = getDominantHub();
-      if (!targetHub || startNode.id === targetHub.id) return [];
+      const pathEdges = [];
+      let currId = startNode.id;
+      const visited = new Set([currId]);
 
-      const targetId = targetHub.id;
-      const queue = [{ id: startNode.id, path: [] }];
-      const visited = new Set([startNode.id]);
-
-      while (queue.length > 0) {
-        const { id, path } = queue.shift();
-        if (id === targetId) return path;
-
+      for (let step = 0; step < maxDepth - 1; step++) {
         const neighborEdges = links.filter(l => {
           const sId = typeof l.source === 'object' ? l.source.id : l.source;
           const tId = typeof l.target === 'object' ? l.target.id : l.target;
-          return (sId === id || tId === id);
+          return (sId === currId && !visited.has(tId)) || (tId === currId && !visited.has(sId));
         });
-        for (const edge of neighborEdges) {
-          const sId = typeof edge.source === 'object' ? edge.source.id : edge.source;
-          const tId = typeof edge.target === 'object' ? edge.target.id : edge.target;
-          const nextId = (sId === id) ? tId : sId;
-          if (!visited.has(nextId)) {
-            visited.add(nextId);
-            queue.push({ id: nextId, path: [...path, { edge, from: id, to: nextId }] });
-          }
-        }
+
+        if (neighborEdges.length === 0) break;
+
+        // Pick neighbor with highest weight * te
+        neighborEdges.sort((a, b) => ((b.weight || 0.5) * (b.te || 0.35)) - ((a.weight || 0.5) * (a.te || 0.35)));
+        const bestEdge = neighborEdges[0];
+        const sId = typeof bestEdge.source === 'object' ? bestEdge.source.id : bestEdge.source;
+        const tId = typeof bestEdge.target === 'object' ? bestEdge.target.id : bestEdge.target;
+        const nextId = (sId === currId) ? tId : sId;
+
+        visited.add(nextId);
+        pathEdges.push({ edge: bestEdge, from: currId, to: nextId });
+        currId = nextId;
       }
-      return [];
+      return pathEdges;
     }
-    const findShortestPathToGold = findShortestPathToHub;
+    const findShortestPathToHub = findTransmissionCascade;
+    const findShortestPathToGold = findTransmissionCascade;
 
     function ticked() {
       ctx.save();
@@ -466,13 +458,6 @@
 
         ctx.fill();
         ctx.shadowBlur = 0;
-
-        if (node.is_hub) {
-          ctx.font = 'bold 10px ui-sans-serif, system-ui, sans-serif';
-          ctx.fillStyle = '#38bdf8';
-          ctx.textAlign = 'center';
-          ctx.fillText('CORE HUB ➔ ' + node.label.toUpperCase(), node.x, node.y + node.r + 12);
-        }
       }
 
       ctx.restore();
@@ -544,7 +529,7 @@
         document.getElementById('tt-lead').innerText = `+${leadMin} min`;
         document.getElementById('tt-te').innerText = (0.65 + (found.r / 8) * 0.3).toFixed(2) + ' bit';
         document.getElementById('tt-accel').innerText = '+' + (2.0 + (found.r / 8) * 2.8).toFixed(1) + 'σ';
-        document.getElementById('tt-hops').innerText = `${hops} Hop${hops > 1 ? 's' : ''} to Core Hub`;
+        document.getElementById('tt-hops').innerText = `${found.degree || 1} Connected Links`;
         document.getElementById('tt-bias').innerText = c.bias;
 
         tooltip.style.left = e.clientX + 'px';
@@ -627,7 +612,7 @@
           </div>
           <p class="text-zinc-400">&bull; Freshness Status: <span class="font-mono px-1 py-0.2 rounded bg-zinc-800 text-cyan-300 text-[9px] font-bold">${freshness}</span></p>
           <p class="text-emerald-400">&bull; Poisson Arrival Velocity: <b>+${zVal}σ</b></p>
-          <p class="text-zinc-400">&bull; Geodesic Distance to Core Hub: <b>${hops} Hops</b></p>
+          <p class="text-zinc-400">&bull; Network Connectivity: <b>${node.degree || 1} Connected Links</b></p>
           <a href="${searchUrl}" target="_blank" class="block w-full py-1.5 px-2 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 text-center font-mono rounded border border-sky-500/40 text-[11px] mt-2 transition">
             🔍 Verify Real-World Wire on Google
           </a>
@@ -638,7 +623,7 @@
       if (tapeEl) {
         tapeEl.innerText = (node.isSurging || node.is_surging) 
           ? `ANOMALY SURGE (+${zVal}σ): Check M5 Absorption` 
-          : `STRUCTURAL TRANSMISSION (Hops: ${hops})`;
+          : `STRUCTURAL TRANSMISSION (${node.degree || 1} Links)`;
       }
 
       drawer.classList.remove('translate-x-[440px]');
@@ -697,12 +682,11 @@
           if (currNodeMap.has(rn.id)) {
             const existing = currNodeMap.get(rn.id);
             existing.label = rn.label;
+            existing.degree = rn.degree || 1;
             existing.z_score = rn.z_score || 0.0;
             existing.isSurging = rn.is_surging || (rn.z_score >= 10.0);
-            existing.is_hub = rn.is_hub || false;
             existing.trigger_text = rn.trigger_text || '';
             existing.trigger_source = rn.trigger_source || '';
-            existing.hops_to_hub = rn.hops_to_hub !== undefined ? rn.hops_to_hub : rn.hops_to_xau;
             existing.age_seconds = rn.age_seconds || 0;
             existing.first_seen_str = rn.first_seen_str || 'Recently';
             existing.last_seen_str = rn.last_seen_str || 'Just now';
@@ -715,13 +699,12 @@
               id: rn.id,
               label: rn.label,
               cluster: rn.cluster,
+              degree: rn.degree || 1,
               r: rn.r || (rn.is_surging ? 5.2 : 3.0),
               z_score: rn.z_score || 0.0,
               isSurging: rn.is_surging || (rn.z_score >= 10.0),
-              is_hub: rn.is_hub || false,
               trigger_text: rn.trigger_text || '',
               trigger_source: rn.trigger_source || '',
-              hops_to_hub: rn.hops_to_hub !== undefined ? rn.hops_to_hub : rn.hops_to_xau,
               age_seconds: rn.age_seconds || 0,
               first_seen_str: rn.first_seen_str || 'Recently',
               last_seen_str: rn.last_seen_str || 'Just now',
@@ -888,9 +871,9 @@
           return currScore > prevScore ? curr : prev;
         }, clusterNodes[0]);
 
-        const shortest = findShortestPathToHub(centralNode);
-        const hops = Math.max(1, shortest.length);
-        const dynamicTauMin = Math.round(hops * 6.5);
+        const cascade = findTransmissionCascade(centralNode);
+        const depth = Math.max(1, cascade.length);
+        const dynamicTauMin = Math.round(depth * 6.5);
 
         const cleanLabel = meta.name;
         const color = meta.color;
