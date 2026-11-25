@@ -244,19 +244,16 @@ class DataCollector:
         # Google News World Geopolitics (US/Global Edition, cached 120s TTL)
         wires.extend(self.fetch_rss_items("https://news.google.com/rss/headlines/section/topic/WORLD?hl=en-US&gl=US&ceid=US:en", "Global Geopolitics", max_items=8, ttl_seconds=120.0))
         
-        # Adaptive Real-Time Breaking Shock Radar (Driven dynamically by top surging topology tokens)
+        # 1. Open-World Global Kinetic Shock Sweeper (Captures breaking physical strikes, explosions, drone attacks worldwide)
+        shock_query = 'when:2h (airstrike OR missile OR explosion OR drone OR strike OR military OR refinery OR pipeline OR "emergency declaration")'
+        shock_url = f"https://news.google.com/rss/search?q={urllib.parse.quote_plus(shock_query)}&hl=en-US&gl=US&ceid=US:en"
+        wires.extend(self.fetch_rss_items(shock_url, "Global Shock Sweeper", max_items=16, ttl_seconds=75.0))
+
+        # 2. Adaptive Real-Time Breaking Shock Radar (Driven dynamically by top surging topology tokens)
         if dynamic_query:
-            clean_q = urllib.parse.quote(dynamic_query)
-            search_url = f"https://news.google.com/rss/search?q=when:1h+({clean_q})&hl=en-US&gl=US&ceid=US:en"
-            wires.extend(self.fetch_rss_items(search_url, "Realtime Shock Radar", max_items=16, ttl_seconds=90.0))
-        else:
-            # Cold-start fallback: broad breaking international headlines
-            wires.extend(self.fetch_rss_items(
-                "https://news.google.com/rss/search?q=when:1h+(breaking+OR+crisis+OR+sanctions+OR+central+bank)&hl=en-US&gl=US&ceid=US:en",
-                "Realtime Shock Radar",
-                max_items=12,
-                ttl_seconds=120.0
-            ))
+            clean_q = urllib.parse.quote_plus(f"when:2h ({dynamic_query})")
+            search_url = f"https://news.google.com/rss/search?q={clean_q}&hl=en-US&gl=US&ceid=US:en"
+            wires.extend(self.fetch_rss_items(search_url, "Dynamic Shock Radar", max_items=14, ttl_seconds=90.0))
         return wires
 
     def fetch_intermarket_wires(self) -> List[Dict[str, str]]:
