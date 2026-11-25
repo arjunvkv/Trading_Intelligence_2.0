@@ -65,7 +65,7 @@ INVARIANT_MACRO_CORE = {
     'treasury', 'treasuries', 'debt', 'bank', 'banks', 'central', 'oil', 'crude',
     'war', 'sanctions', 'bonds', 'reserve', 'reserves', 'deficit', 'liquidity',
     'tariff', 'tariffs', 'bullion', 'xau', 'dxy', 'tips', 'recession', 'debasement',
-    'comex', 'sge', 'lbma', 'vault', 'inventory', 'refinery', 'premium'
+    'comex', 'lbma', 'vault', 'inventory', 'refinery', 'premium'
 }
 
 CROWD_SOURCES = {'wikimedia attention pulse', 'google crowd autocomplete', 'mastodon decentralized fediverse'}
@@ -202,12 +202,15 @@ class TopologyEngine:
             tokens = self._clean_tokens(text)
             ngrams = self._extract_ngrams(text)
 
+            pub_ts = item.get("published_ts", now)
+            item_arrival_ts = pub_ts if (now - pub_ts) < 86400 else now
+
             # 1. Multi-Word Phrase Tracking with Provenance & ICF
             is_crowd_doc = is_crowd or any(k in source.lower() for k in ['crowd', 'search', 'wikimedia', 'mastodon'])
             seen_phrases_in_doc = set()
             for phrase in ngrams[:8]:
                 if is_new_item:
-                    self.phrase_history[phrase].append(now)
+                    self.phrase_history[phrase].append(item_arrival_ts)
                     if phrase not in seen_phrases_in_doc:
                         self.phrase_doc_counts[phrase] += 1
                         seen_phrases_in_doc.add(phrase)
@@ -227,7 +230,7 @@ class TopologyEngine:
             # 2. Token-level statistics & Poisson arrival
             for t in tokens[:6]:
                 if t not in self.token_first_seen:
-                    self.token_first_seen[t] = now
+                    self.token_first_seen[t] = item_arrival_ts
                 self.token_publishers[t].add(publisher)
                 self.token_sources[t].add(source)
                 
@@ -236,7 +239,7 @@ class TopologyEngine:
                 # ONLY update frequency and timestamps if this is a genuinely new headline/item
                 if is_new_item:
                     self.token_mentions[t] += 1
-                    self.token_history[t].append(now)
+                    self.token_history[t].append(item_arrival_ts)
                     self.token_trigger[t] = (clean_trig, publisher)
                 
                 self.token_history[t] = [ts for ts in self.token_history[t] if now - ts < 7200]
@@ -261,14 +264,6 @@ class TopologyEngine:
                 p_t = (total_mentions + 1) / (total_docs + 2)
                 surprisal = max(0.5, -math.log2(p_t))
                 info_energy = round(surprisal * max(0.0, z), 2)
-
-                # Mathematical Statistical Admission Gate:
-                # Do NOT instantiate sub-Brownian single-publisher noise (z < 1.0 and pub_count == 1 and total_mentions < 3)
-                # unless the node is already an active structural or established node in the graph.
-                is_established = t in self.nodes
-                is_statistically_significant = (z >= 1.0 or pub_count >= 2 or total_mentions >= 3 or t in INVARIANT_MACRO_CORE)
-                if not (is_established or is_statistically_significant):
-                    continue
 
                 label = publisher.split()[0] + ": " + t.capitalize()
                 
@@ -796,8 +791,8 @@ class TopologyEngine:
                 cull_nodes.add(nid)
                 continue
 
-            # Sub-Brownian noise leaf with degree <= 1 and single publisher: cull immediately if z < 1.0 or after 60s
-            if deg <= 1 and pub_count <= 1 and (data.get("z_score", 0.0) < 1.0 or mentions <= 2) and (now - self.token_first_seen.get(nid, now)) > 60:
+            # Isolated single-source leaf with degree <= 1 after observation window (180s): cull
+            if deg <= 1 and pub_count <= 1 and mentions <= 2 and (now - self.token_first_seen.get(nid, now)) > 180:
                 cull_nodes.add(nid)
                 continue
 

@@ -103,6 +103,14 @@ class LeadArbiter:
 
         total_shock = 0.0
         active_events = 0
+        # Statistical Syndication Mirror Filter:
+        # Simultaneous RSS items within 45s are syndication mirrors, not independent chain-reaction shocks
+        sorted_ts = sorted(timestamps)
+        distinct_temporal_waves = 1
+        for idx in range(1, len(sorted_ts)):
+            if sorted_ts[idx] - sorted_ts[idx-1] > 45:
+                distinct_temporal_waves += 1
+
         for ts in timestamps:
             dt = now - ts
             if 0 <= dt <= 7200: # within last 2 hours
@@ -118,12 +126,12 @@ class LeadArbiter:
             state = "CROWD_PULSE"
             is_ignition = False
             badge = f"👥 Crowd Pulse ({ratio}x)"
-        elif ratio >= 3.0 and distinct_pubs >= 2:
-            state = "IGNITION" # Exponential organic cascade verified across 2+ newsrooms!
+        elif ratio >= 3.0 and distinct_pubs >= 3 and distinct_temporal_waves >= 2:
+            state = "IGNITION" # Exponential organic cascade verified across 3+ newsrooms across distinct time waves!
             is_ignition = True
             badge = f"🔥 Hawkes: IGNITION ({ratio}x)"
-        elif ratio >= 1.8:
-            state = "COMPOUNDING" # Multi-source developing traction
+        elif ratio >= 1.8 and distinct_pubs >= 2:
+            state = "COMPOUNDING" # Multi-source developing traction across 2+ publishers
             is_ignition = False
             badge = f"⚡ Hawkes: COMPOUNDING ({ratio}x)"
         elif ratio > 1.2:

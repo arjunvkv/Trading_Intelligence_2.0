@@ -16,6 +16,7 @@ import time
 import math
 import re
 import html
+import email.utils
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Tuple
 
@@ -201,6 +202,21 @@ class DataCollector:
             for item in root.findall('.//item')[:max_items]:
                 title = item.find('title')
                 link = item.find('link')
+                pub_date = item.find('pubDate')
+                
+                published_ts = now
+                if pub_date is not None and pub_date.text:
+                    try:
+                        dt = email.utils.parsedate_to_datetime(pub_date.text)
+                        published_ts = dt.timestamp()
+                    except Exception:
+                        pass
+                
+                # Strict Temporal Invariant: Drop stale articles older than 36 hours
+                # Prevents search engines and aggregators from injecting multi-day-old archival stories as fresh news
+                if (now - published_ts) > 129600:
+                    continue
+
                 if title is not None and title.text:
                     clean_title = html.unescape(title.text.strip())
                     publisher = source_name
@@ -215,7 +231,8 @@ class DataCollector:
                             "source": source_name,
                             "publisher": publisher,
                             "text": clean_title,
-                            "url": url_str
+                            "url": url_str,
+                            "published_ts": published_ts
                         })
             if items:
                 self.feed_cache[feed_url] = (now, items)
