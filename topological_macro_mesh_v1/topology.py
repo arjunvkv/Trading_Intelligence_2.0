@@ -220,6 +220,12 @@ class TopologyEngine:
                     z = max(0.0, raw_z)
                     is_surging = (z >= 6.0 and pub_count >= 2)
 
+                # Shannon Information Surprisal: I(t) = -log2(P(t))
+                total_docs = max(10, self.total_docs_seen)
+                p_t = (total_mentions + 1) / (total_docs + 2)
+                surprisal = max(0.5, -math.log2(p_t))
+                info_energy = round(surprisal * max(0.0, z), 2)
+
                 label = publisher.split()[0] + ": " + t.capitalize()
                 
                 # ONLY refresh last_seen if this is a new item, or if node doesn't exist yet!
@@ -231,6 +237,8 @@ class TopologyEngine:
                     "label": label[:34],
                     "last_seen": node_last_seen,
                     "z_score": round(z, 2),
+                    "surprisal": round(surprisal, 2),
+                    "info_energy": info_energy,
                     "is_surging": is_surging,
                     "r": 5.2 if is_surging else 3.2,
                     "trigger_text": clean_trig if is_new_item else self.nodes.get(t, {}).get("trigger_text", clean_trig),
@@ -302,6 +310,50 @@ class TopologyEngine:
                         self.edges[edge_key]["weight"] = dynamic_weight
                         self.edges[edge_key]["te"] = dynamic_te
                         self.edges[edge_key]["last_seen"] = now
+
+            # 5. Graph Topological Diffusion (2-Hop Resource Allocation Transmission to god_xau)
+            # Pure mathematical linkage: allows non-kinetic hybrid warfare and sovereign reserve
+            # moves to link to Gold via network bridge topology, even when 'gold' is not literally in the text.
+            if not is_gold_doc and is_new_item:
+                # Find established 1-hop macro bridges to god_xau (weight >= 0.70)
+                macro_bridges = []
+                for (src, tgt), ed in self.edges.items():
+                    if ed.get("weight", 0) >= 0.70:
+                        if src == "god_xau" and tgt != "god_xau":
+                            macro_bridges.append((tgt, ed["weight"]))
+                        elif tgt == "god_xau" and src != "god_xau":
+                            macro_bridges.append((src, ed["weight"]))
+
+                if macro_bridges:
+                    for tok in tokens[:4]:
+                        if tok == "god_xau" or len(tok) < 3:
+                            continue
+                        tok_pubs = len(self.token_publishers.get(tok, []))
+                        tok_z = self.nodes.get(tok, {}).get("z_score", 0.0)
+                        
+                        # Only substantive tokens with multi-publisher confirmation or elevated burst velocity
+                        if tok_pubs < 2 and tok_z < 2.0:
+                            continue
+
+                        # Calculate 2-hop Resource Allocation (RA) diffusion score across common macro bridges
+                        ra_score = 0.0
+                        for bridge, bridge_w in macro_bridges:
+                            edge_tb = tuple(sorted([tok, bridge]))
+                            if edge_tb in self.edges:
+                                w_tb = self.edges[edge_tb].get("weight", 0.5)
+                                deg_b = max(2, len([e for e in self.edges if bridge in e]))
+                                ra_score += (w_tb * bridge_w) / math.log(1.0 + deg_b)
+
+                        # Mathematical threshold for topological transmission
+                        if ra_score >= 0.35:
+                            diffuse_w = round(min(2.2, 0.65 + (ra_score * 0.40)), 2)
+                            diffuse_te = round(min(0.80, 0.35 + (ra_score * 0.25)), 2)
+                            edge_key = tuple(sorted([tok, "god_xau"]))
+                            if edge_key not in self.edges:
+                                self.edges[edge_key] = {"weight": diffuse_w, "last_seen": now, "te": diffuse_te}
+                            else:
+                                self.edges[edge_key]["weight"] = max(self.edges[edge_key]["weight"], diffuse_w)
+                                self.edges[edge_key]["last_seen"] = now
 
     def find_shortest_causal_path(self, start_token: str, target: str = "god_xau") -> Tuple[List[str], float]:
         """
@@ -396,19 +448,25 @@ class TopologyEngine:
 
     def get_surging_entities(self, top_k: int = 5) -> List[str]:
         """
-        Returns dynamic surging entities/tokens from the graph (high z-score, multi-publisher).
-        Excludes god anchor nodes, numbers, and stopwords.
-        Used to dynamically steer crowd collection without hardcoded seed lists.
+        Returns dynamic surging entities/tokens from the graph using Information Energy:
+        E = Surprisal * Z-Score * Newsroom Quorum.
+        Guarantees that unpredicted real-world anomalies surge ahead of mundane recurring noise.
         """
         candidates = []
+        total_docs = max(10, self.total_docs_seen)
         for nid, data in self.nodes.items():
             if data.get("is_god") or not isinstance(nid, str) or len(nid) < 3 or nid.isdigit():
                 continue
             z = data.get("z_score", 0.0)
             pubs = len(self.token_publishers.get(nid, set()))
             mentions = self.token_mentions.get(nid, 1)
-            # Prioritize real multi-publisher backing and mathematical surge
-            score = z * math.log(1 + mentions) * (1.5 if pubs >= 2 else 1.0)
+            
+            # Shannon Surprisal: -log2(P(w))
+            p_w = (mentions + 1) / (total_docs + 2)
+            surprisal = max(0.5, -math.log2(p_w))
+            
+            # Information Energy with Publisher Quorum weighting
+            score = surprisal * z * math.log(1.0 + mentions) * (1.8 if pubs >= 2 else 0.8)
             candidates.append((nid, score, z, pubs))
         
         candidates.sort(key=lambda x: x[1], reverse=True)
@@ -795,6 +853,8 @@ class TopologyEngine:
                 "label": d["label"],
                 "cluster": dyn_cluster,
                 "z_score": d["z_score"],
+                "surprisal": d.get("surprisal", 0.0),
+                "info_energy": d.get("info_energy", 0.0),
                 "is_surging": d.get("is_surging", False),
                 "is_god": d.get("is_god", False),
                 "is_crowd": is_crowd,

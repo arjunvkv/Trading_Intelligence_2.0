@@ -59,7 +59,12 @@ class DataCollector:
         self.country_round_robin_roster = [
             ("US Macro/Treasuries", "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-US&gl=US&ceid=US:en"),
             ("UK London LBMA", "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-GB&gl=GB&ceid=GB:en"),
+            ("Germany Bundesbank/Eurozone", "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-DE&gl=DE&ceid=DE:en"),
+            ("Poland NBP Sovereign Reserves", "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-PL&gl=PL&ceid=PL:en"),
+            ("Czech CNB Sovereign Reserves", "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-CZ&gl=CZ&ceid=CZ:en"),
+            ("Switzerland SNB Sovereign Hub", "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-CH&gl=CH&ceid=CH:en"),
             ("China/HK Sovereign Hub", "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-HK&gl=HK&ceid=HK:en"),
+            ("India RBI Sovereign Gold Hub", "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-IN&gl=IN&ceid=IN:en"),
             ("Singapore Asia FX", "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-SG&gl=SG&ceid=SG:en"),
             ("Gulf OPEC/Energy", "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-AE&gl=AE&ceid=AE:en"),
             ("Australia Gold Producer", "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-AU&gl=AU&ceid=AU:en"),
@@ -244,10 +249,8 @@ class DataCollector:
         # Google News World Geopolitics (US/Global Edition, cached 120s TTL)
         wires.extend(self.fetch_rss_items("https://news.google.com/rss/headlines/section/topic/WORLD?hl=en-US&gl=US&ceid=US:en", "Global Geopolitics", max_items=8, ttl_seconds=120.0))
         
-        # 1. Open-World Global Kinetic Shock Sweeper (Captures breaking physical strikes, explosions, drone attacks worldwide)
-        shock_query = 'when:2h (airstrike OR missile OR explosion OR drone OR strike OR military OR refinery OR pipeline OR "emergency declaration")'
-        shock_url = f"https://news.google.com/rss/search?q={urllib.parse.quote_plus(shock_query)}&hl=en-US&gl=US&ceid=US:en"
-        wires.extend(self.fetch_rss_items(shock_url, "Global Shock Sweeper", max_items=16, ttl_seconds=75.0))
+        # 1. Open-World Unfiltered Global Top Wire (Zero keyword constraints - captures any planetary shock or anomaly)
+        wires.extend(self.fetch_rss_items("https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en", "Global Top Unfiltered Wire", max_items=16, ttl_seconds=75.0))
 
         # 2. Adaptive Real-Time Breaking Shock Radar (Driven dynamically by top surging topology tokens)
         if dynamic_query:
