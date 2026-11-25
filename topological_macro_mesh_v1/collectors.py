@@ -14,6 +14,7 @@ import json
 import xml.etree.ElementTree as ET
 import time
 import re
+import html
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
 
@@ -175,12 +176,13 @@ class DataCollector:
                 title = item.find('title')
                 link = item.find('link')
                 if title is not None and title.text:
-                    clean_title = title.text.strip()
+                    clean_title = html.unescape(title.text.strip())
                     publisher = source_name
                     m = re.search(r'\s*-\s*([A-Za-z0-9\.\s]+)$', clean_title)
                     if m:
                         publisher = m.group(1).strip()
                     clean_title = re.sub(r'\s*-\s*[A-Za-z0-9\.\s]+$', '', clean_title)
+                    clean_title = re.sub(r'(?:https?://|www\.|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}/)\S*', '', clean_title).strip()
                     url_str = link.text.strip() if link is not None and link.text else ""
                     if clean_title:
                         items.append({
@@ -336,22 +338,45 @@ class DataCollector:
                     data = json.loads(raw.decode('utf-8', errors='ignore'))
                     for post in data:
                         content = post.get('content', '')
-                        # Strip HTML tags
-                        clean = re.sub(r'<[^>]+>', ' ', content).strip()
-                        # Strip all URLs and web handles
-                        clean = re.sub(r'https?://\S+|www\.\S+', ' ', clean)
-                        clean = re.sub(r'@[a-zA-Z0-9_]+', ' ', clean)
+                        if not content:
+                            continue
+                            
+                        # 1. Unescape HTML entities first so &#39; -> ', &quot; -> ", &amp; -> &
+                        clean = html.unescape(content)
+                        
+                        # 2. Strip all <a ...>...</a> tags completely before removing other HTML tags
+                        # This eliminates nested spans and link previews (e.g. <span class="invisible">https://</span>)
+                        clean = re.sub(r'<a\b[^>]*>.*?</a>', ' ', clean, flags=re.DOTALL)
+                        
+                        # 3. Strip all remaining HTML tags
+                        clean = re.sub(r'<[^>]+>', ' ', clean)
+                        
+                        # 4. Strip leftover URLs (with protocol or bare domains)
+                        clean = re.sub(r'(?:https?://|www\.|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}/)\S*', ' ', clean)
+                        
+                        # 5. Strip handles and broken mention fragments
+                        clean = re.sub(r'@\s*[a-zA-Z0-9_]+', ' ', clean)
+                        
+                        # 6. Strip reply / content-warning prefixes
+                        clean = re.sub(r'^(?:re|cw):\s*', '', clean, flags=re.I)
+                        
+                        # 7. Normalize spaces
                         clean = re.sub(r'\s+', ' ', clean).strip()
                         
-                        # Reject promotional event and marketing spam
+                        # 8. Reject promotional event and marketing spam
                         if any(m in clean.lower() for m in ['#tradeshow', '#conference', '#expo', '#giveaway', '#airdrop', '#contest', 'sponsored']):
                             continue
                             
-                        if clean and len(clean) > 20:
+                        # 9. Clean whole-word boundary truncation up to 220 chars (no half-cut words)
+                        if len(clean) > 220:
+                            last_sp = clean[:220].rfind(' ')
+                            clean = clean[:last_sp] if last_sp > 160 else clean[:220]
+                            
+                        if clean and len(clean) > 25:
                             posts.append({
                                 "source": source_name,
                                 "publisher": source_name,
-                                "text": clean[:180]
+                                "text": clean
                             })
                 except Exception:
                     pass

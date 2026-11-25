@@ -10,6 +10,7 @@ Eliminates all 4 Traps:
 import time
 import math
 import re
+import html
 import heapq
 import urllib.parse
 from collections import defaultdict, deque
@@ -45,7 +46,9 @@ STOPWORDS = {
     'wikipedia', 'attention', 'inquiries', 'velocity', 'article', 'articles', 'pulse', 'squawk', 'squawks',
     'guide', 'guides', 'online', 'tools', 'website', 'service', 'services',
     # Numeric words and quantity counters
-    'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'hundred', 'thousand'
+    'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'hundred', 'thousand',
+    # Unescaped HTML entities artifacts
+    'quot', 'apos', 'amp', 'nbsp', 'lt', 'gt'
 }
 
 # Recognized 3-letter macro acronyms, sovereign entities, and commodities
@@ -95,12 +98,26 @@ class TopologyEngine:
         }
         self.token_first_seen["god_xau"] = now
 
+    def _format_trigger_text(self, text: str, max_len: int = 220) -> str:
+        cleaned = html.unescape(text).strip()
+        # Strip all URLs (with protocol or bare domains)
+        cleaned = re.sub(r'(?:https?://|www\.|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}/)\S*', '', cleaned)
+        # Strip reply / content-warning prefixes
+        cleaned = re.sub(r'^(?:re|cw):\s*', '', cleaned, flags=re.I)
+        cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+        if len(cleaned) <= max_len:
+            return cleaned
+        last_sp = cleaned[:max_len].rfind(' ')
+        return (cleaned[:last_sp] if last_sp > max_len - 40 else cleaned[:max_len]) + "..."
+
     def _clean_tokens(self, text: str) -> List[str]:
+        # Unescape HTML entities first
+        text = html.unescape(text)
         # Track uppercase 3-letter acronyms from raw text before lowercasing (e.g. 'CEO', 'TSA', 'BMW', 'ICC', 'WHO')
         uppercase_3_acronyms = set(re.findall(r'\b[A-Z]{3}\b', text))
 
-        # Strip all URLs, domain suffixes, and social handles before tokenizing
-        cleaned = re.sub(r'https?://\S+|www\.\S+|\.com|\.org|\.net|\.io|\.co|\.tech|\.de', ' ', text.lower())
+        # Strip all URLs, bare domains, and social handles before tokenizing
+        cleaned = re.sub(r'(?:https?://|www\.|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}/)\S*', ' ', text.lower())
         cleaned = re.sub(r'@[a-zA-Z0-9_]+', ' ', cleaned)
         words = re.findall(r'[a-zA-Z]{3,}', cleaned)
         
@@ -178,11 +195,13 @@ class TopologyEngine:
                 self.token_publishers[t].add(publisher)
                 self.token_sources[t].add(source)
                 
+                clean_trig = self._format_trigger_text(text, 220)
+
                 # ONLY update frequency and timestamps if this is a genuinely new headline/item
                 if is_new_item:
                     self.token_mentions[t] += 1
                     self.token_history[t].append(now)
-                    self.token_trigger[t] = (text[:140], publisher)
+                    self.token_trigger[t] = (clean_trig, publisher)
                 
                 self.token_history[t] = [ts for ts in self.token_history[t] if now - ts < 7200]
 
@@ -214,7 +233,7 @@ class TopologyEngine:
                     "z_score": round(z, 2),
                     "is_surging": is_surging,
                     "r": 5.2 if is_surging else 3.2,
-                    "trigger_text": text[:140] if is_new_item else self.nodes.get(t, {}).get("trigger_text", text[:140]),
+                    "trigger_text": clean_trig if is_new_item else self.nodes.get(t, {}).get("trigger_text", clean_trig),
                     "trigger_source": publisher if is_new_item else self.nodes.get(t, {}).get("trigger_source", publisher)
                 }
 
@@ -751,8 +770,8 @@ class TopologyEngine:
             # Extract verification and provenance
             pubs = list(self.token_publishers.get(nid, []))
             is_crowd = (len(pubs) > 0 and all(p.lower() in CROWD_SOURCES or 'crowd' in p.lower() or 'search' in p.lower() or 'wiki' in p.lower() or 'mastodon' in p.lower() for p in pubs))
-            trig_query = d.get("trigger_text", nid)
-            q_google = urllib.parse.quote(trig_query[:100])
+            clean_trigger = self._format_trigger_text(d.get("trigger_text", nid), 220)
+            q_google = urllib.parse.quote(clean_trigger[:100])
             q_x = urllib.parse.quote(nid)
 
             nodes_out.append({
@@ -764,7 +783,7 @@ class TopologyEngine:
                 "is_god": d.get("is_god", False),
                 "is_crowd": is_crowd,
                 "r": d.get("r", 3.0),
-                "trigger_text": d.get("trigger_text", ""),
+                "trigger_text": clean_trigger,
                 "trigger_source": d.get("trigger_source", ""),
                 "publishers": pubs,
                 "publisher_count": len(pubs),
