@@ -71,6 +71,35 @@ class MacroEntityExtractor:
         'return', 'acting', 'first', 'second', 'third', 'high', 'low', 'near'
     }
 
+    CANONICAL_ALIASES = {
+        "imf": ("international_monetary_fund", "International Monetary Fund"),
+        "international monetary fund": ("international_monetary_fund", "International Monetary Fund"),
+        "mas": ("monetary_authority_of_singapore", "Monetary Authority of Singapore"),
+        "monetary authority of singapore": ("monetary_authority_of_singapore", "Monetary Authority of Singapore"),
+        "monetary authority of singapores": ("monetary_authority_of_singapore", "Monetary Authority of Singapore"),
+        "ecb": ("european_central_bank", "European Central Bank"),
+        "european central bank": ("european_central_bank", "European Central Bank"),
+        "boj": ("bank_of_japan", "Bank of Japan"),
+        "bank of japan": ("bank_of_japan", "Bank of Japan"),
+        "pboc": ("peoples_bank_of_china", "People's Bank of China"),
+        "peoples bank of china": ("peoples_bank_of_china", "People's Bank of China"),
+        "pbo c": ("peoples_bank_of_china", "People's Bank of China"),
+        "snb": ("swiss_national_bank", "Swiss National Bank"),
+        "swiss national bank": ("swiss_national_bank", "Swiss National Bank"),
+        "rbi": ("reserve_bank_of_india", "Reserve Bank of India"),
+        "reserve bank of india": ("reserve_bank_of_india", "Reserve Bank of India"),
+        "bis": ("bank_for_international_settlements", "Bank for International Settlements"),
+        "bank for international settlements": ("bank_for_international_settlements", "Bank for International Settlements"),
+        "fomc": ("federal_open_market_committee", "Federal Open Market Committee"),
+        "federal open market committee": ("federal_open_market_committee", "Federal Open Market Committee"),
+        "fed": ("federal_reserve", "Federal Reserve"),
+        "federal reserve": ("federal_reserve", "Federal Reserve"),
+        "federal reserve board": ("federal_reserve_board", "Federal Reserve Board"),
+        "brics": ("brics", "BRICS"),
+        "gdp": ("gdp", "GDP"),
+        "dxy": ("dxy", "DXY")
+    }
+
     def __init__(self, model_name: str = "urchade/gliner_small-v2.1", device: str = "cpu"):
         self.device = device
         self.model = None
@@ -133,7 +162,36 @@ class MacroEntityExtractor:
         if not raw_candidates:
             return []
 
-        # 3. Deduplicate and Apply Sub-String / Sub-Token Suppression
+        # 3. Canonical Aliasing (Resolve acronyms & full titles to unified canonical entity)
+        for cand in raw_candidates:
+            raw_key = cand["label"].lower().strip()
+            clean_key = re.sub(r'^(the|a|an)\s+', '', raw_key).strip()
+            clean_key = re.sub(r"['’]s$", '', clean_key).strip()
+            clean_key = clean_key.replace("'", "")
+
+            matched = False
+            if clean_key in self.CANONICAL_ALIASES:
+                canon_id, canon_label = self.CANONICAL_ALIASES[clean_key]
+                cand["id"] = canon_id
+                cand["name"] = canon_label
+                cand["label"] = canon_label
+                matched = True
+            elif raw_key in self.CANONICAL_ALIASES:
+                canon_id, canon_label = self.CANONICAL_ALIASES[raw_key]
+                cand["id"] = canon_id
+                cand["name"] = canon_label
+                cand["label"] = canon_label
+                matched = True
+
+            if not matched:
+                for alias_k, (c_id, c_lbl) in self.CANONICAL_ALIASES.items():
+                    if " " in alias_k and alias_k in clean_key:
+                        cand["id"] = c_id
+                        cand["name"] = c_lbl
+                        cand["label"] = c_lbl
+                        break
+
+        # 4. Deduplicate and Apply Sub-String / Sub-Token Suppression
         # Sort candidates by length of entity label descending (longest entity first)
         raw_candidates.sort(key=lambda x: len(x["label"]), reverse=True)
 
@@ -178,7 +236,6 @@ class MacroEntityExtractor:
 
         # 2. Known Sovereign States & Regions
         for state in self.KNOWN_SOVEREIGN_STATES:
-            # Word boundary matching
             pattern = r'\b' + re.escape(state) + r'\b'
             if re.search(pattern, text, re.IGNORECASE):
                 norm = re.sub(r'[^a-z0-9]+', '_', state).strip('_')
@@ -195,12 +252,37 @@ class MacroEntityExtractor:
                     seen.add(norm)
                     results.append({"id": norm, "name": concept.title(), "label": concept.title(), "category": "macro_concept", "score": 0.88})
 
-        # 4. Capitalized Multi-Word Phrases (e.g. "Federal Reserve", "Treasury Yield", "Suez Canal")
+        # 4. Capitalized Multi-Word Phrases with Preposition & Financial Fragment Trimming
+        TRIM_TOKENS = {
+            'at', 'to', 'for', 'with', 'during', 'by', 'in', 'on', 'of', 'from',
+            'and', 'or', 'about', 'up', 'down', 'into', 'over', 'per', 'amid',
+            'as', 'out', 'off', 'than', 'under', 'after', 'near', 'offers',
+            'offer', 'says', 'say', 'told', 'joins', 'starts', 'ended', 'ending',
+            'holds', 'leaves', 'causes', 'sets', 'targeting', 'targets', 'paid'
+        }
+
         for chunk in re.findall(r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b', text):
-            norm = re.sub(r'[^a-z0-9]+', '_', chunk.lower()).strip('_')
-            words = set(norm.split('_'))
-            if norm not in seen and not words.intersection(self.GRAMMAR_STOPWORDS):
+            words = chunk.split()
+            while words and words[0].lower() in TRIM_TOKENS:
+                words.pop(0)
+            while words and words[-1].lower() in TRIM_TOKENS:
+                words.pop()
+            if len(words) < 2:
+                continue
+            cleaned_chunk = " ".join(words)
+
+            # Discard corporate equity micro-placement noise
+            if any(bad in cleaned_chunk.lower() for bad in [
+                'per share', 'ordinary shares', 'new shares', 'pence per', 'cents per',
+                'mln new', 'dividend', 'earnings per', 'wedding party', 'photo caption',
+                'press review', 'terms tools', 'hearing entitled', 'unlocking new'
+            ]):
+                continue
+
+            norm = re.sub(r'[^a-z0-9]+', '_', cleaned_chunk.lower()).strip('_')
+            norm_words = set(norm.split('_'))
+            if norm not in seen and not norm_words.intersection(self.GRAMMAR_STOPWORDS):
                 seen.add(norm)
-                results.append({"id": norm, "name": chunk.title(), "label": chunk.title(), "category": "named_entity", "score": 0.75})
+                results.append({"id": norm, "name": cleaned_chunk.title(), "label": cleaned_chunk.title(), "category": "named_entity", "score": 0.75})
 
         return results

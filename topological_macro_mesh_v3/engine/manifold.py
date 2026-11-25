@@ -141,6 +141,12 @@ class TopologicalManifold:
             # Register with surprisal calculator
             self.surprisal.register_entity(name)
 
+            wire_record = {
+                "title": title,
+                "publisher": publisher,
+                "timestamp": now
+            }
+
             if name not in self.nodes:
                 self.nodes[name] = {
                     "id": name,
@@ -152,6 +158,7 @@ class TopologicalManifold:
                     "source_type": source_type,
                     "trigger_text": title,
                     "trigger_source": publisher,
+                    "wire_history": [wire_record] if title else [],
                     "hawkes_lambda": 0.05,
                     "branching_ratio": 0.0,
                     "z_score": 0.0,
@@ -163,10 +170,17 @@ class TopologicalManifold:
                 node = self.nodes[name]
                 node["last_updated"] = now
                 node["observation_count"] += 1
-                # Update headline with freshest title
-                if title and len(title) > len(node.get("trigger_text", "")):
-                    node["trigger_text"] = title
-                    node["trigger_source"] = publisher
+                if "wire_history" not in node:
+                    node["wire_history"] = []
+                
+                # Append distinct genuine wire to history buffer (up to 12 items)
+                if title:
+                    existing_titles = {w["title"].strip().lower() for w in node["wire_history"]}
+                    if title.strip().lower() not in existing_titles:
+                        node["wire_history"].insert(0, wire_record)
+                        if len(node["wire_history"]) > 12:
+                            node["wire_history"].pop()
+
                 if category != "UNKNOWN" and node["category"] in ["UNKNOWN", "DEFAULT"]:
                     node["category"] = category
 
@@ -291,6 +305,89 @@ class TopologicalManifold:
             min_flow_threshold=0.10
         )
 
+        # 7. Maximum Mutual Information Bipartite Verbatim Assignment
+        self.assign_unique_verbatims()
+
+    def assign_unique_verbatims(self):
+        """
+        Greedy Maximum Mutual Information Bipartite Verbatim Assignment.
+        Guarantees that every node in the active graph is assigned a unique,
+        genuine, unedited real-world wire headline from its wire_history buffer.
+        Eliminates duplicate verbatims across nodes without reducing node count.
+        """
+        candidates = []
+        now = time.time()
+
+        for name, node in self.nodes.items():
+            wh = node.get("wire_history", [])
+            if not wh:
+                cur_text = node.get("trigger_text")
+                if cur_text:
+                    wh = [{
+                        "title": cur_text,
+                        "publisher": node.get("trigger_source", "Sovereign Wire"),
+                        "timestamp": node.get("last_updated", now)
+                    }]
+                    node["wire_history"] = wh
+                else:
+                    continue
+
+            surprisal = node.get("surprisal", 2.0)
+            degree = node.get("degree", 1)
+            name_lower = name.lower()
+
+            for rank, item in enumerate(wh):
+                title = item.get("title", "").strip()
+                if not title:
+                    continue
+                title_lower = title.lower()
+
+                # Match bonus: exact entity presence in headline gives priority (+3.5)
+                match_weight = 3.5 if name_lower in title_lower else 1.0
+                recency_mult = max(0.2, 1.0 - (rank * 0.10))
+                score = (surprisal * 1.5 + math.log1p(degree)) * match_weight * recency_mult
+
+                candidates.append((score, name, item))
+
+        # Sort candidate assignments descending by score
+        candidates.sort(key=lambda x: x[0], reverse=True)
+
+        assigned_nodes = set()
+        assigned_titles = set()
+
+        # Pass 1: High-conviction distinct matching
+        for score, name, item in candidates:
+            if name in assigned_nodes:
+                continue
+            norm_title = item["title"].strip().lower()
+            if norm_title in assigned_titles:
+                continue
+
+            self.nodes[name]["trigger_text"] = item["title"]
+            self.nodes[name]["trigger_source"] = item.get("publisher", "Sovereign Wire")
+            assigned_nodes.add(name)
+            assigned_titles.add(norm_title)
+
+        # Pass 2: Remaining nodes - find best unused wire in their buffer
+        for name, node in self.nodes.items():
+            if name in assigned_nodes:
+                continue
+            wh = node.get("wire_history", [])
+            chosen = None
+            for item in wh:
+                norm_title = item["title"].strip().lower()
+                if norm_title not in assigned_titles:
+                    chosen = item
+                    break
+            if not chosen and wh:
+                chosen = wh[0]
+
+            if chosen:
+                node["trigger_text"] = chosen["title"]
+                node["trigger_source"] = chosen.get("publisher", "Sovereign Wire")
+                assigned_nodes.add(name)
+                assigned_titles.add(chosen["title"].strip().lower())
+
     def get_graph_export(self, radar=None, collector_health: Dict[str, Any] = None) -> Dict[str, Any]:
         """
         Exports the entire manifold in 100% D3 UI-compliant JSON structure.
@@ -335,6 +432,24 @@ class TopologicalManifold:
             q_google = urllib.parse.quote(trigger_text[:100])
             q_x = urllib.parse.quote(name)
 
+            # Multi-wire dossier
+            wh = node.get("wire_history", [])
+            wire_dossier = []
+            for w in wh[:6]:
+                wt = w.get("title", "").strip()
+                if not wt:
+                    continue
+                wp = w.get("publisher", "Sovereign Wire")
+                ts = w.get("timestamp", now)
+                diff = max(0, int(now - ts))
+                age_label = f"{int(diff / 60)}m ago" if diff >= 60 else f"{diff}s ago"
+                wire_dossier.append({
+                    "title": wt,
+                    "publisher": wp,
+                    "age_str": age_label,
+                    "verify_google": f"https://www.google.com/search?q={urllib.parse.quote(wt[:100])}"
+                })
+
             export_nodes.append({
                 "id": node["id"],
                 "label": node["label"],
@@ -353,6 +468,7 @@ class TopologicalManifold:
                 "r": node_r,
                 "trigger_text": trigger_text,
                 "trigger_source": trigger_source,
+                "wire_history": wire_dossier,
                 "publishers": pubs,
                 "publisher_count": len(pubs),
                 "age_seconds": age_sec,

@@ -787,10 +787,37 @@
         const ageText = node.first_seen_str || 'Recently';
         const lastSeenText = node.last_seen_str || 'Just now';
         const freshness = node.freshness_regime || 'ACTIVE';
+
+        // Additional distinct genuine wires for this entity
+        let dossierHtml = '';
+        const otherWires = (node.wire_history || []).filter(w => w.title && w.title.trim().toLowerCase() !== trigText.trim().toLowerCase());
+        if (otherWires.length > 0) {
+          dossierHtml = `
+            <div class="mt-2.5 pt-2 border-t border-zinc-800">
+              <span class="text-[9.5px] font-semibold text-zinc-400 uppercase tracking-wider block mb-1.5 flex items-center gap-1">
+                <span>📰</span> Corroborating Sovereign Stream (${otherWires.length} Distinct Wires)
+              </span>
+              <div class="space-y-1.5 max-h-48 overflow-y-auto custom-scroll pr-1">
+                ${otherWires.slice(0, 4).map(w => `
+                  <div class="bg-zinc-950/90 p-1.5 rounded border border-zinc-800/80 text-[10px] space-y-0.5">
+                    <div class="flex justify-between items-center text-zinc-500 font-mono text-[8.5px]">
+                      <span class="text-cyan-400 font-semibold truncate max-w-[150px]">${w.publisher}</span>
+                      <span class="flex-shrink-0">${w.age_str}</span>
+                    </div>
+                    <p class="text-zinc-300 font-mono text-[9.5px] leading-snug">"${w.title}"</p>
+                    <a href="${w.verify_google}" target="_blank" class="inline-block text-[8.5px] text-sky-400 hover:text-sky-300 font-mono underline">
+                      Verify &rarr;
+                    </a>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          `;
+        }
         
         evidenceEl.innerHTML = `
-          <p class="text-white">&bull; Source: <span class="text-cyan-300 font-semibold">${trigSource}</span></p>
-          <p class="text-zinc-300 leading-snug">&bull; Verbatim Headline / Query: <br><span class="text-amber-300 font-mono">"${trigText}"</span></p>
+          <p class="text-white">&bull; Primary Source: <span class="text-cyan-300 font-semibold">${trigSource}</span></p>
+          <p class="text-zinc-300 leading-snug">&bull; Primary Verbatim Headline: <br><span class="text-amber-300 font-mono">"${trigText}"</span></p>
           <div class="grid grid-cols-2 gap-1.5 pt-1.5 mt-1 border-t border-zinc-800 text-[10px]">
             <p class="text-zinc-400">&bull; First Seen: <b class="text-zinc-200">${ageText}</b></p>
             <p class="text-zinc-400">&bull; Last Active: <b class="text-emerald-400">${lastSeenText}</b></p>
@@ -799,8 +826,9 @@
           <p class="text-emerald-400">&bull; Poisson Arrival Velocity: <b>+${zVal}σ</b></p>
           <p class="text-zinc-400">&bull; Network Connectivity: <b>${node.degree || 1} Connected Links</b></p>
           <a href="${searchUrl}" target="_blank" class="block w-full py-1.5 px-2 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 text-center font-mono rounded border border-sky-500/40 text-[11px] mt-2 transition">
-            🔍 Verify Real-World Wire on Google
+            🔍 Verify Lead Wire on Google
           </a>
+          ${dossierHtml}
         `;
       }
 
@@ -876,6 +904,7 @@
             existing.isSurging = rn.is_surging || (rn.z_score >= 10.0);
             existing.trigger_text = rn.trigger_text || '';
             existing.trigger_source = rn.trigger_source || '';
+            existing.wire_history = rn.wire_history || [];
             existing.age_seconds = rn.age_seconds || 0;
             existing.first_seen_str = rn.first_seen_str || 'Recently';
             existing.last_seen_str = rn.last_seen_str || 'Just now';
@@ -895,6 +924,7 @@
               isSurging: rn.is_surging || (rn.z_score >= 10.0),
               trigger_text: rn.trigger_text || '',
               trigger_source: rn.trigger_source || '',
+              wire_history: rn.wire_history || [],
               age_seconds: rn.age_seconds || 0,
               first_seen_str: rn.first_seen_str || 'Recently',
               last_seen_str: rn.last_seen_str || 'Just now',
