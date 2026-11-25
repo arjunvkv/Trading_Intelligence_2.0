@@ -180,30 +180,13 @@ class LeadArbiter:
             pipeline = f"{transmission_path[0].upper()}_VECTOR"
             inflection_minutes = (max(5, len(transmission_path) * 4), len(transmission_path) * 8 + 10)
             gold_bias = "VOLATILITY_EXPANSION" if len(transmission_path) <= 3 else "STRUCTURAL_DIFFUSION"
-        elif cluster_idx == 0:
-            pipeline = "SOVEREIGN_MONETARY_VECTOR"
-            pipe_name = "Sovereign Fiscal & Liquidity Realm"
-            transmission = "Fiscal Dominance & Central Bank Reserves ➔ Sovereign Bullion Floor"
-            gold_bias = "STRUCTURAL_DEBASEMENT_BID"
-            inflection_minutes = (15, 40)
-        elif cluster_idx == 2:
-            pipeline = "GEOPOLITICAL_KINETIC_VECTOR"
-            pipe_name = "Geopolitical & Physical Supply Realm"
-            transmission = "Trade Disruption & Conflict Escalation ➔ Safe-Haven Risk Premium Expansion"
-            gold_bias = "SAFE_HAVEN_EXPANSION"
-            inflection_minutes = (8, 25)
-        elif cluster_idx == 1:
-            pipeline = "INTERMARKET_YIELD_VECTOR"
-            pipe_name = "Intermarket Yield & Dollar Realm"
-            transmission = "Real Yields & FX Transmission ➔ Opportunity Cost Repricing"
-            gold_bias = "VOLATILITY_EXPANSION"
-            inflection_minutes = (10, 30)
         else:
-            pipeline = "STRUCTURAL_EQUILIBRIUM"
-            pipe_name = "Macro Structural Equilibrium"
-            transmission = "Empirical Macro Diffusion ➔ Tape Liquidity Absorption"
+            # Dynamic graph diffusion fallback (Zero hardcoded cluster assumptions)
+            pipeline = "STRUCTURAL_DIFFUSION"
+            pipe_name = "Topological Graph Diffusion"
+            transmission = "Multi-Hop Cross-Cluster Transmission ➔ Orderbook Liquidity Absorption"
             gold_bias = "EQUILIBRIUM_SEEKING"
-            inflection_minutes = (12, 35)
+            inflection_minutes = (15, 35)
 
         return {
             "pipeline": pipeline,

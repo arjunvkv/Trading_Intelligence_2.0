@@ -144,7 +144,7 @@ class TopologyEngine:
                 ngrams.append(phrase)
         return ngrams
 
-    def ingest_stream_items(self, items: List[Dict[str, str]], realm_anchor: str = None, cluster_idx: int = 0):
+    def ingest_stream_items(self, items: List[Dict[str, str]], is_crowd: bool = False):
         """
         Open-World Ingestion with Publisher Provenance Tracking.
         Kills the Echo-Chamber Mirage by separating raw mentions from distinct publisher entities.
@@ -167,7 +167,7 @@ class TopologyEngine:
             ngrams = self._extract_ngrams(text)
 
             # 1. Multi-Word Phrase Tracking with Provenance & ICF
-            is_crowd = (cluster_idx == 4 or "crowd" in source.lower() or "search" in source.lower() or "wikimedia" in source.lower() or "mastodon" in source.lower())
+            is_crowd_doc = is_crowd or any(k in source.lower() for k in ['crowd', 'search', 'wikimedia', 'mastodon'])
             seen_phrases_in_doc = set()
             for phrase in ngrams[:8]:
                 if is_new_item:
@@ -177,7 +177,7 @@ class TopologyEngine:
                         seen_phrases_in_doc.add(phrase)
                 self.phrase_publishers[phrase].add(publisher)
                 self.phrase_sources[phrase].add(source)
-                if is_crowd:
+                if is_crowd_doc:
                     self.crowd_phrases.add(phrase)
                 else:
                     self.wire_phrases.add(phrase)
@@ -227,7 +227,7 @@ class TopologyEngine:
                 node_last_seen = now if is_new_item else existing_last_seen
 
                 self.nodes[t] = {
-                    "cluster": cluster_idx,
+                    "cluster": self.nodes[t]["cluster"] if t in self.nodes else 0,
                     "label": label[:34],
                     "last_seen": node_last_seen,
                     "z_score": round(z, 2),

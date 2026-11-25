@@ -45,18 +45,11 @@ class EngineService:
             dynamic_search = "+OR+".join(dynamic_seeds[:4]) if dynamic_seeds else None
             snapshot = self.collector.fetch_all(dynamic_seeds=dynamic_seeds, dynamic_search_query=dynamic_search)
             
-            # 2. Ingest into topology via the 3 Macro Realms
-            # Sovereign & Central Banks (Cluster 0) -> god_debase
-            self.topology.ingest_stream_items(snapshot.get("sovereign_wires", []), realm_anchor="god_debase", cluster_idx=0)
-            
-            # Geopolitical & Kinetic Precursor Wires (Cluster 2) -> god_geo
-            self.topology.ingest_stream_items(snapshot.get("geopolitical_wires", []), realm_anchor="god_geo", cluster_idx=2)
-
-            # Intermarket Wires: Gold, Dollar, Yields, Crude, MarketWatch (Cluster 1) -> god_market
-            self.topology.ingest_stream_items(snapshot.get("market_wires", []), realm_anchor="god_market", cluster_idx=1)
-            
-            # Open Macro Discussions & Crowd Queries (Cluster 4) -> god_market
-            self.topology.ingest_stream_items(snapshot.get("crowd_discussions", []), realm_anchor="god_market", cluster_idx=4)
+            # 2. Ingest into topology (True multi-source provenance: Wires vs Crowd)
+            self.topology.ingest_stream_items(snapshot.get("sovereign_wires", []), is_crowd=False)
+            self.topology.ingest_stream_items(snapshot.get("geopolitical_wires", []), is_crowd=False)
+            self.topology.ingest_stream_items(snapshot.get("market_wires", []), is_crowd=False)
+            self.topology.ingest_stream_items(snapshot.get("crowd_discussions", []), is_crowd=True)
 
             # 3. Export latest graph (runs mathematical prune & orphan cull)
             self.latest_graph = self.topology.export_graph_json()
