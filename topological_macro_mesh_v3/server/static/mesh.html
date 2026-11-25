@@ -265,7 +265,8 @@
     <div class="h-3 w-px bg-zinc-800"></div>
     <div class="text-zinc-400 font-mono text-[11px]">
       Nodes: <span id="hud-nodes" class="text-white font-bold">--</span> &bull; 
-      Burst (<5m): <span id="hud-fresh" class="text-emerald-400 font-bold">--</span> &bull; 
+      Communities: <span id="hud-communities" class="text-amber-400 font-bold">--</span> &bull; 
+      Burst (&lt;5m): <span id="hud-fresh" class="text-emerald-400 font-bold">--</span> &bull; 
       Active: <span id="hud-active" class="text-cyan-300 font-bold">--</span>
     </div>
   </footer>
@@ -1061,6 +1062,9 @@
         const hudNodes = document.getElementById('hud-nodes');
         if (hudNodes) hudNodes.innerText = nodes.length;
 
+        const hudComm = document.getElementById('hud-communities');
+        if (hudComm) hudComm.innerText = data.communities_count || (data.communities ? data.communities.length : '--');
+
         if (data.age_distribution) {
           const freshEl = document.getElementById('hud-fresh');
           const activeEl = document.getElementById('hud-active');
@@ -1078,6 +1082,12 @@
       const tray = document.getElementById('dynamic-cluster-list');
       if (!tray) return;
 
+      const algoEl = document.getElementById('tray-algorithm');
+      if (algoEl && graphData && (graphData.communities_count || (graphData.communities && graphData.communities.length))) {
+        const cCount = graphData.communities_count || graphData.communities.length;
+        algoEl.innerText = `LEIDEN (${cCount})`;
+      }
+
       // Populate dynamicCommunitiesMap from server's mathematical community detection
       if (graphData && graphData.communities && Array.isArray(graphData.communities)) {
         graphData.communities.forEach(c => {
@@ -1090,57 +1100,92 @@
         });
       }
 
-      // Group nodes by cluster ID
-      const clusterMap = new Map();
-      nodes.forEach(n => {
-        const c = n.cluster !== undefined ? n.cluster : 0;
-        if (!clusterMap.has(c)) clusterMap.set(c, []);
-        clusterMap.get(c).push(n);
-      });
-
-      // Sort clusters by size descending (largest primary macro theaters first)
-      const sortedClusters = Array.from(clusterMap.entries())
-        .sort((a, b) => b[1].length - a[1].length)
-        .slice(0, 8);
-
       tray.innerHTML = '';
 
-      sortedClusters.forEach(([cIdx, clusterNodes]) => {
-        const meta = getClusterMeta(cIdx);
-        // Find the central node
-        const centralNode = clusterNodes.reduce((prev, curr) => {
-          const prevScore = (prev.r || 3) * 2 + (prev.z_score || 0);
-          const currScore = (curr.r || 3) * 2 + (curr.z_score || 0);
-          return currScore > prevScore ? curr : prev;
-        }, clusterNodes[0]);
+      if (graphData && graphData.communities && Array.isArray(graphData.communities) && graphData.communities.length > 0) {
+        // Direct rendering of server's top detected communities
+        const topCommunities = graphData.communities.slice(0, 8);
+        topCommunities.forEach(c => {
+          const color = PALETTE[c.id % PALETTE.length];
+          const cleanLabel = c.name;
+          const clusterNodes = nodes.filter(n => (n.cluster === c.id || n.community_id === c.id));
+          const centralNode = clusterNodes.length > 0
+            ? clusterNodes.reduce((prev, curr) => ((curr.r || 3) * 2 + (curr.z_score || 0)) > ((prev.r || 3) * 2 + (prev.z_score || 0)) ? curr : prev, clusterNodes[0])
+            : (nodes.find(n => c.top_tokens && c.top_tokens.includes(n.label)) || nodes[0]);
 
-        const cascade = findTransmissionCascade(centralNode);
-        const depth = Math.max(1, cascade.length);
-        const dynamicTauMin = Math.round(depth * 6.5);
+          const cascade = centralNode ? findTransmissionCascade(centralNode) : [];
+          const depth = Math.max(1, cascade.length);
+          const dynamicTauMin = Math.round(depth * 6.5);
+          const nodeCount = c.size || clusterNodes.length || 1;
 
-        const cleanLabel = meta.name;
-        const color = meta.color;
+          const row = document.createElement('div');
+          row.className = 'flex items-center justify-between p-1 rounded hover:bg-zinc-800/60 cursor-pointer transition';
+          row.onclick = () => {
+            if (centralNode) {
+              d3.select(canvas).transition().duration(800).call(
+                zoom.transform,
+                d3.zoomIdentity.translate(width / 2, height / 2).scale(1.8).translate(-centralNode.x, -centralNode.y)
+              );
+              selectNode(centralNode);
+            }
+          };
 
-        const row = document.createElement('div');
-        row.className = 'flex items-center justify-between p-1 rounded hover:bg-zinc-800/60 cursor-pointer transition';
-        row.onclick = () => {
-          d3.select(canvas).transition().duration(800).call(
-            zoom.transform,
-            d3.zoomIdentity.translate(width / 2, height / 2).scale(1.8).translate(-centralNode.x, -centralNode.y)
-          );
-          selectNode(centralNode);
-        };
+          row.innerHTML = `
+            <div class="flex items-center gap-1.5 truncate pr-2">
+              <span class="w-2 h-2 rounded-full flex-shrink-0" style="background: ${color};"></span>
+              <span class="text-zinc-300 truncate font-medium">${cleanLabel}</span>
+              <span class="text-zinc-500 font-mono text-[9px] flex-shrink-0">(${nodeCount})</span>
+            </div>
+            <span class="text-zinc-400 font-mono text-[10px] flex-shrink-0">τ: ${dynamicTauMin}m</span>
+          `;
+          tray.appendChild(row);
+        });
+      } else {
+        // Fallback: Group nodes by cluster ID
+        const clusterMap = new Map();
+        nodes.forEach(n => {
+          const c = n.cluster !== undefined ? n.cluster : 0;
+          if (!clusterMap.has(c)) clusterMap.set(c, []);
+          clusterMap.get(c).push(n);
+        });
 
-        row.innerHTML = `
-          <div class="flex items-center gap-2 truncate pr-2">
-            <span class="w-2 h-2 rounded-full flex-shrink-0" style="background: ${color};"></span>
-            <span class="text-zinc-300 truncate font-medium">${cleanLabel}</span>
-          </div>
-          <span class="text-zinc-400 font-mono text-[10px] flex-shrink-0">τ: ${dynamicTauMin}m</span>
-        `;
+        const sortedClusters = Array.from(clusterMap.entries())
+          .sort((a, b) => b[1].length - a[1].length)
+          .slice(0, 8);
 
-        tray.appendChild(row);
-      });
+        sortedClusters.forEach(([cIdx, clusterNodes]) => {
+          const meta = getClusterMeta(cIdx);
+          const centralNode = clusterNodes.reduce((prev, curr) => {
+            const prevScore = (prev.r || 3) * 2 + (prev.z_score || 0);
+            const currScore = (curr.r || 3) * 2 + (curr.z_score || 0);
+            return currScore > prevScore ? curr : prev;
+          }, clusterNodes[0]);
+
+          const cascade = findTransmissionCascade(centralNode);
+          const depth = Math.max(1, cascade.length);
+          const dynamicTauMin = Math.round(depth * 6.5);
+
+          const row = document.createElement('div');
+          row.className = 'flex items-center justify-between p-1 rounded hover:bg-zinc-800/60 cursor-pointer transition';
+          row.onclick = () => {
+            d3.select(canvas).transition().duration(800).call(
+              zoom.transform,
+              d3.zoomIdentity.translate(width / 2, height / 2).scale(1.8).translate(-centralNode.x, -centralNode.y)
+            );
+            selectNode(centralNode);
+          };
+
+          row.innerHTML = `
+            <div class="flex items-center gap-1.5 truncate pr-2">
+              <span class="w-2 h-2 rounded-full flex-shrink-0" style="background: ${meta.color};"></span>
+              <span class="text-zinc-300 truncate font-medium">${meta.name}</span>
+              <span class="text-zinc-500 font-mono text-[9px] flex-shrink-0">(${clusterNodes.length})</span>
+            </div>
+            <span class="text-zinc-400 font-mono text-[10px] flex-shrink-0">τ: ${dynamicTauMin}m</span>
+          `;
+          tray.appendChild(row);
+        });
+      }
     }
 
     function updatePrecursorClues(clues) {

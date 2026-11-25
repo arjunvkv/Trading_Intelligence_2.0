@@ -88,9 +88,8 @@ class SovereignMeshDaemon:
         all_docs = sovereign_docs + geopolitical_docs + intermarket_docs + crowd_docs
         log(f"Fetched {len(all_docs)} raw documents ({len(sovereign_docs)} sovereign, {len(geopolitical_docs)} geopo, {len(intermarket_docs)} flow, {len(crowd_docs)} crowd).")
 
-        # Ingest into manifold
-        for doc in all_docs:
-            self.manifold.ingest_document(doc)
+        # Ingest into manifold using high-speed parallel batching
+        accepted = self.manifold.ingest_batch(all_docs)
 
         # Update topology: decay, Hawkes processes, community detection, Transfer Entropy
         self.manifold.update_topology()

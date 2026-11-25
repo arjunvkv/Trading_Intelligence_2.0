@@ -55,69 +55,82 @@ class GeopoliticalWiresCollector:
                 pass
         return now
 
+    def _fetch_single_feed(self, feed_meta: Dict[str, Any], now: float) -> List[Dict[str, Any]]:
+        name = feed_meta["name"]
+        url = feed_meta["url"]
+
+        if name not in self.feed_states:
+            self.feed_states[name] = {"source": name, "status": "HEALTHY", "last_success": 0.0, "error_msg": None}
+
+        if now - self.last_fetch.get(name, 0.0) < self.cooldown_sec:
+            return []
+
+        try:
+            ctx = ssl._create_unverified_context()
+            req = urllib.request.Request(
+                url,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) SovereignMacro/3.0"}
+            )
+            with urllib.request.urlopen(req, context=ctx, timeout=self.request_timeout) as resp:
+                raw_data = resp.read()
+
+            parsed = feedparser.parse(raw_data)
+            feed_candidates = []
+            for entry in parsed.entries[:14]:
+                title = entry.get("title", "").strip()
+                summary = entry.get("summary", "").strip()
+                link = entry.get("link", url)
+                published = entry.get("published", "")
+                pub_ts = self._parse_pub_ts(entry)
+                age_sec = max(0.0, now - pub_ts)
+
+                if title and len(title) > 10:
+                    feed_candidates.append({
+                        "title": title,
+                        "summary": summary,
+                        "publisher": name,
+                        "source_type": "GEOPOLITICAL_KINETIC",
+                        "link": link,
+                        "published": published,
+                        "published_at": pub_ts,
+                        "timestamp": now,
+                        "age_sec": age_sec
+                    })
+
+            self.last_fetch[name] = now
+            self.feed_states[name]["status"] = "HEALTHY"
+            self.feed_states[name]["last_success"] = now
+            self.feed_states[name]["error_msg"] = None
+
+            # Apply 48-Hour Publication Age Gate
+            fresh_items = [item for item in feed_candidates if item["age_sec"] <= self.max_age_seconds]
+            if fresh_items:
+                return fresh_items
+            elif feed_candidates:
+                feed_candidates.sort(key=lambda x: x["age_sec"])
+                if feed_candidates[0]["age_sec"] <= (72.0 * 3600.0):
+                    return [feed_candidates[0]]
+            return []
+        except Exception as e:
+            self.feed_states[name]["status"] = "CONNECTION_ERROR"
+            self.feed_states[name]["error_msg"] = str(e)[:50]
+            return []
+
     def fetch_wires(self) -> List[Dict[str, Any]]:
-        """Collects latest articles across geopolitical feeds strictly within the 48-hour gate."""
+        """Collects latest articles across geopolitical feeds in parallel within the 48-hour gate."""
+        import concurrent.futures
         articles = []
         now = time.time()
 
-        for feed_meta in self.GEOPOLITICAL_FEEDS:
-            name = feed_meta["name"]
-            url = feed_meta["url"]
-
-            if name not in self.feed_states:
-                self.feed_states[name] = {"source": name, "status": "HEALTHY", "last_success": 0.0, "error_msg": None}
-
-            if now - self.last_fetch.get(name, 0.0) < self.cooldown_sec:
-                continue
-
-            try:
-                ctx = ssl._create_unverified_context()
-                req = urllib.request.Request(
-                    url,
-                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) SovereignMacro/3.0"}
-                )
-                with urllib.request.urlopen(req, context=ctx, timeout=self.request_timeout) as resp:
-                    raw_data = resp.read()
-
-                parsed = feedparser.parse(raw_data)
-                feed_candidates = []
-                for entry in parsed.entries[:14]:
-                    title = entry.get("title", "").strip()
-                    summary = entry.get("summary", "").strip()
-                    link = entry.get("link", url)
-                    published = entry.get("published", "")
-                    pub_ts = self._parse_pub_ts(entry)
-                    age_sec = max(0.0, now - pub_ts)
-
-                    if title and len(title) > 10:
-                        feed_candidates.append({
-                            "title": title,
-                            "summary": summary,
-                            "publisher": name,
-                            "source_type": "GEOPOLITICAL_KINETIC",
-                            "link": link,
-                            "published": published,
-                            "timestamp": pub_ts if pub_ts <= now else now,
-                            "age_sec": age_sec
-                        })
-
-                # Apply 48-Hour Publication Age Gate
-                fresh_items = [item for item in feed_candidates if item["age_sec"] <= self.max_age_seconds]
-                if fresh_items:
-                    articles.extend(fresh_items)
-                elif feed_candidates:
-                    feed_candidates.sort(key=lambda x: x["age_sec"])
-                    if feed_candidates[0]["age_sec"] <= (72.0 * 3600.0):
-                        articles.append(feed_candidates[0])
-
-                self.last_fetch[name] = now
-                self.feed_states[name]["status"] = "HEALTHY"
-                self.feed_states[name]["last_success"] = now
-                self.feed_states[name]["error_msg"] = None
-            except Exception as e:
-                self.feed_states[name]["status"] = "CONNECTION_ERROR"
-                self.feed_states[name]["error_msg"] = str(e)[:50]
-                continue
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [executor.submit(self._fetch_single_feed, meta, now) for meta in self.GEOPOLITICAL_FEEDS]
+            for fut in concurrent.futures.as_completed(futures):
+                try:
+                    res = fut.result()
+                    if res:
+                        articles.extend(res)
+                except Exception:
+                    pass
 
         return articles
 
