@@ -247,17 +247,26 @@
     </div>
   </aside>
 
-  <!-- Bottom Floating HUD -->
-  <footer class="shadcn-card fixed bottom-4 right-4 rounded-lg px-4 py-2 text-xs flex items-center gap-4 z-10 pointer-events-auto border border-zinc-800 shadow-xl">
+  <!-- Bottom Floating HUD & Sovereign Domain Legend -->
+  <footer class="shadcn-card fixed bottom-4 right-4 rounded-lg px-4 py-2 text-xs flex items-center gap-4 z-10 pointer-events-auto border border-zinc-800 shadow-xl bg-zinc-950/90 backdrop-blur-md">
     <div class="flex items-center gap-2">
       <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
-      <span class="text-zinc-300 font-mono text-[11px]">MACRO MANIFOLD</span>
+      <span class="text-zinc-300 font-mono text-[11px] font-semibold">MACRO MANIFOLD</span>
+    </div>
+    <div class="h-3 w-px bg-zinc-800"></div>
+    <div class="flex items-center gap-3 text-[10px] font-mono text-zinc-400">
+      <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-cyan-400"></span>Rates</span>
+      <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-rose-500"></span>Kinetic</span>
+      <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-purple-500"></span>Debt/Fiscal</span>
+      <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-400"></span>Bullion/FX</span>
+      <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-orange-500"></span>Commodities</span>
+      <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-400"></span>Data Prints</span>
     </div>
     <div class="h-3 w-px bg-zinc-800"></div>
     <div class="text-zinc-400 font-mono text-[11px]">
       Nodes: <span id="hud-nodes" class="text-white font-bold">--</span> &bull; 
       Burst (<5m): <span id="hud-fresh" class="text-emerald-400 font-bold">--</span> &bull; 
-      Active (5-60m): <span id="hud-active" class="text-cyan-300 font-bold">--</span>
+      Active: <span id="hud-active" class="text-cyan-300 font-bold">--</span>
     </div>
   </footer>
 
@@ -280,6 +289,93 @@
 
     const PALETTE = ['#f97316', '#38bdf8', '#ef4444', '#eab308', '#ec4899', '#22c55e', '#a855f7', '#14b8a6', '#06b6d4', '#f43f5e'];
     const dynamicCommunitiesMap = new Map();
+
+    // Sovereign Macro Domain Color Mapping (Functional Causal Vectors to XAUUSD)
+    const DOMAIN_PALETTE = {
+      // Rates / Carry / Monetary Policy (Cyan / Sky)
+      "central bank": { hue: "#06b6d4", rgb: [6, 182, 212], name: "Central Bank / Policy Rates", bias: "RATES GRAVITY" },
+      "monetary policy": { hue: "#38bdf8", rgb: [56, 189, 248], name: "Monetary Policy Transmission", bias: "RATES GRAVITY" },
+      "central bank governor": { hue: "#0ea5e9", rgb: [14, 165, 233], name: "Sovereign Arbiter Speech", bias: "RATES GRAVITY" },
+      "macro_acronym": { hue: "#38bdf8", rgb: [56, 189, 248], name: "Monetary Acronym", bias: "RATES GRAVITY" },
+
+      // Kinetic Geopolitics / Military / Chokepoint (Safe-Haven Spike - Rose / Crimson)
+      "geopolitical conflict": { hue: "#f43f5e", rgb: [244, 63, 94], name: "Kinetic Military Escalation", bias: "SAFE-HAVEN SPIKE" },
+      "sanctions": { hue: "#ef4444", rgb: [239, 68, 68], name: "Sanctions / Trade Blockade", bias: "SAFE-HAVEN SPIKE" },
+      "chokepoint": { hue: "#e11d48", rgb: [225, 29, 72], name: "Maritime Energy Chokepoint", bias: "SAFE-HAVEN SPIKE" },
+
+      // Sovereign Debt / Fiscal Debasement (Purple / Amethyst)
+      "sovereign state": { hue: "#a855f7", rgb: [168, 85, 247], name: "Sovereign Balance Sheet", bias: "DEBASEMENT EXPANSION" },
+      "financial shock": { hue: "#c084fc", rgb: [192, 132, 252], name: "Systemic Financial Stress", bias: "DEBASEMENT EXPANSION" },
+
+      // Reserves / De-Dollarization / Bilateral Swaps (Solar Gold / Amber)
+      "reserves": { hue: "#fbbf24", rgb: [251, 191, 36], name: "Bullion & FX Reserves", bias: "PHYSICAL ACCUMULATION" },
+      "macro_concept": { hue: "#f59e0b", rgb: [245, 158, 11], name: "Structural Macro Mechanism", bias: "PHYSICAL ACCUMULATION" },
+
+      // Critical Commodities / Energy Supply (Flame Orange)
+      "critical commodity": { hue: "#f97316", rgb: [249, 115, 22], name: "Critical Commodity / Supply Shock", bias: "INFLATION PUSH" },
+      "trade policy": { hue: "#ea580c", rgb: [234, 88, 12], name: "Strategic Export Control", bias: "INFLATION PUSH" },
+
+      // Macro Prints / Economic Indicators (Emerald Mint)
+      "macro indicator": { hue: "#10b981", rgb: [16, 185, 129], name: "Macro Economic Indicator", bias: "GROWTH / PRINTS" },
+
+      // Institutional Named Entity / Default (Celestial Slate)
+      "named_entity": { hue: "#94a3b8", rgb: [148, 163, 184], name: "Macro Institutional Entity", bias: "TRANSIENT" },
+      "DEFAULT": { hue: "#64748b", rgb: [100, 116, 139], name: "Emergent Macro Vector", bias: "TRANSIENT" }
+    };
+
+    function getNodeDomainMeta(category) {
+      const cat = (category || "").toLowerCase();
+      if (DOMAIN_PALETTE[cat]) return DOMAIN_PALETTE[cat];
+      for (const key in DOMAIN_PALETTE) {
+        if (cat.includes(key)) return DOMAIN_PALETTE[key];
+      }
+      return DOMAIN_PALETTE["DEFAULT"];
+    }
+
+    function getNodeVisualState(node) {
+      const domain = getNodeDomainMeta(node.category);
+      const z = node.z_score || 0.0;
+      const [r, g, b] = domain.rgb;
+
+      let fillStyle, strokeStyle, shadowColor, shadowBlur = 0, isWhiteHot = false;
+
+      if (z >= 15.0) {
+        // Stage-3 Breakout Outlier Shock: White-hot radiant center with intense chromatic aura
+        isWhiteHot = true;
+        fillStyle = "#ffffff";
+        strokeStyle = domain.hue;
+        shadowColor = domain.hue;
+        shadowBlur = 16;
+      } else if (z >= 6.0) {
+        // Stage-2 Accelerating Cascade: Bright saturated neon with ambient glow
+        fillStyle = domain.hue;
+        strokeStyle = "#ffffff";
+        shadowColor = domain.hue;
+        shadowBlur = 8;
+      } else if (z >= 2.0) {
+        // Stage-1 Precursor Whisper: Clean saturated color
+        fillStyle = `rgba(${r}, ${g}, ${b}, 0.88)`;
+        strokeStyle = `rgba(${r}, ${g}, ${b}, 0.4)`;
+        shadowColor = domain.hue;
+        shadowBlur = 4;
+      } else {
+        // Quiescent / Resting: Soft desaturated pastel (opacity 50%)
+        fillStyle = `rgba(${r}, ${g}, ${b}, 0.50)`;
+        strokeStyle = "transparent";
+        shadowColor = "transparent";
+        shadowBlur = 0;
+      }
+
+      return {
+        domain,
+        fillStyle,
+        strokeStyle,
+        shadowColor,
+        shadowBlur,
+        isWhiteHot,
+        z
+      };
+    }
 
     function getClusterMeta(cIdx) {
       const idx = cIdx !== undefined ? cIdx : 0;
@@ -365,6 +461,40 @@
       ctx.translate(transform.x, transform.y);
       ctx.scale(transform.k, transform.k);
 
+      // 0. Ambient Celestial Nebulas for Macro Theaters (Communities)
+      const clusterNodesMap = new Map();
+      for (const node of nodes) {
+        const c = node.cluster !== undefined ? node.cluster : 0;
+        if (!clusterNodesMap.has(c)) clusterNodesMap.set(c, []);
+        clusterNodesMap.get(c).push(node);
+      }
+
+      clusterNodesMap.forEach((cNodes, cIdx) => {
+        if (cNodes.length < 3) return;
+        let sumX = 0, sumY = 0;
+        for (const n of cNodes) { sumX += n.x; sumY += n.y; }
+        const cx = sumX / cNodes.length;
+        const cy = sumY / cNodes.length;
+
+        let maxDist = 0;
+        for (const n of cNodes) {
+          const d = Math.hypot(n.x - cx, n.y - cy);
+          if (d > maxDist) maxDist = d;
+        }
+        const radius = Math.min(320, Math.max(60, maxDist + 35));
+        const cMeta = getClusterMeta(cIdx);
+
+        const grad = ctx.createRadialGradient(cx, cy, 5, cx, cy, radius);
+        grad.addColorStop(0, cMeta.color + '14');   // 8% opacity center
+        grad.addColorStop(0.5, cMeta.color + '08'); // 3% opacity mid
+        grad.addColorStop(1, 'rgba(0,0,0,0)');      // 0% opacity outer edge
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.fillStyle = grad;
+        ctx.fill();
+      });
+
       // 1. Draw Links with Soft, Subdued Opacities (Robust Object Resolution)
       const nodeMap = new Map(nodes.map(n => [n.id, n]));
       for (const link of links) {
@@ -381,23 +511,22 @@
 
         if (isInActivePath) {
           // Gentle glowing cyan highway
-          ctx.strokeStyle = 'rgba(56, 189, 248, 0.75)';
-          ctx.lineWidth = 1.3 / transform.k;
+          ctx.strokeStyle = 'rgba(56, 189, 248, 0.85)';
+          ctx.lineWidth = 1.4 / transform.k;
         } else if (isHovered) {
           // Soft white for hovered connections
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
           ctx.lineWidth = 1.0 / transform.k;
         } else {
-          // Ambient celestial web lines
-          const cIdx = s.cluster !== undefined ? s.cluster : 0;
-          const col = getClusterMeta(cIdx).color;
-          ctx.strokeStyle = col + '38'; // 22% opacity
-          ctx.lineWidth = 0.7 / transform.k;
+          // Subtle celestial web line inheriting source domain color
+          const sState = getNodeVisualState(s);
+          ctx.strokeStyle = `rgba(${sState.domain.rgb.join(',')}, 0.20)`;
+          ctx.lineWidth = 0.65 / transform.k;
         }
         ctx.stroke();
 
         // Traveling Information Pulses
-        if (isInActivePath || (isHovered && Math.random() < 0.2)) {
+        if (isInActivePath || (isHovered && Math.random() < 0.25)) {
           const speed = (link.weight || 0.5) * 0.7;
           const prog = (animTime * speed) % 1;
           const px = s.x + (t.x - s.x) * prog;
@@ -405,57 +534,67 @@
 
           ctx.beginPath();
           ctx.arc(px, py, 1.6 / transform.k, 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
-          ctx.shadowColor = 'rgba(56, 189, 248, 0.4)';
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+          ctx.shadowColor = 'rgba(56, 189, 248, 0.5)';
           ctx.shadowBlur = 4;
           ctx.fill();
           ctx.shadowBlur = 0;
         }
       }
 
-      // 2. Draw Nodes & Gentle Wavefront Rings (Restricted to True Extreme Anomalies)
+      // 2. Draw Nodes & Wavefront Shockwaves (Sovereign Chromatic Physics)
       for (const node of nodes) {
-        const cluster = getClusterMeta(node.cluster);
+        const vState = getNodeVisualState(node);
         const isSelected = (selectedNode === node);
         const isHovered = (hoveredNode === node);
 
-        // Concentric golden rings STRICTLY for genuine extreme outliers (Z >= 15.0σ)
+        // Concentric expanding shockwave radar rings for extreme outliers (Z >= 15.0σ)
         if (node.isSurging && (node.z_score >= 15.0)) {
           // Inner concentric ring
           ctx.beginPath();
           ctx.arc(node.x, node.y, node.r + 3.2, 0, Math.PI * 2);
-          ctx.strokeStyle = '#eab308';
+          ctx.strokeStyle = vState.domain.hue;
           ctx.lineWidth = 1.2 / transform.k;
           ctx.stroke();
 
           // Expanding soft breathing radar wavefront
-          const ringRad = node.r + 4 + ((animTime * 12) % 18);
-          const ringOpacity = Math.max(0, 0.5 - (ringRad / 30));
+          const ringRad = node.r + 4 + ((animTime * 12) % 20);
+          const ringOpacity = Math.max(0, 0.55 - (ringRad / 30));
           ctx.beginPath();
           ctx.arc(node.x, node.y, ringRad, 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(234, 179, 8, ${ringOpacity})`;
+          ctx.strokeStyle = `rgba(${vState.domain.rgb.join(',')}, ${ringOpacity})`;
           ctx.lineWidth = 0.9 / transform.k;
           ctx.stroke();
         }
 
         // Node Body
         ctx.beginPath();
-        ctx.arc(node.x, node.y, (isHovered || isSelected ? node.r * 1.5 : node.r), 0, Math.PI * 2);
+        const baseR = (isHovered || isSelected ? node.r * 1.5 : node.r);
+        ctx.arc(node.x, node.y, baseR, 0, Math.PI * 2);
 
         if (isSelected) {
           ctx.fillStyle = '#ffffff';
           ctx.shadowColor = '#ffffff';
-          ctx.shadowBlur = 12;
+          ctx.shadowBlur = 14;
         } else if (isHovered) {
           ctx.fillStyle = '#ffffff';
-          ctx.shadowColor = cluster.color;
-          ctx.shadowBlur = 8;
+          ctx.shadowColor = vState.domain.hue;
+          ctx.shadowBlur = 10;
         } else {
-          ctx.fillStyle = cluster.color;
-          ctx.shadowBlur = 0;
+          ctx.fillStyle = vState.fillStyle;
+          ctx.shadowColor = vState.shadowColor;
+          ctx.shadowBlur = vState.shadowBlur;
         }
 
         ctx.fill();
+
+        // White-hot core border ring
+        if (vState.isWhiteHot && !isSelected && !isHovered) {
+          ctx.strokeStyle = vState.strokeStyle;
+          ctx.lineWidth = 1.6 / transform.k;
+          ctx.stroke();
+        }
+
         ctx.shadowBlur = 0;
       }
 
@@ -517,9 +656,10 @@
       if (found) {
         hoveredNode = found;
         const c = getClusterMeta(found.cluster);
+        const vState = getNodeVisualState(found);
         document.getElementById('tt-title').innerText = found.label;
-        document.getElementById('tt-cluster').innerText = c.name.toUpperCase();
-        document.getElementById('tt-dot').style.background = c.color;
+        document.getElementById('tt-cluster').innerText = `${c.name.toUpperCase()} • ${vState.domain.name.toUpperCase()}`;
+        document.getElementById('tt-dot').style.background = vState.domain.hue;
         
         const shortest = findShortestPathToHub(found);
         const hops = shortest.length || 1;
@@ -527,9 +667,9 @@
         
         document.getElementById('tt-lead').innerText = `+${leadMin} min`;
         document.getElementById('tt-te').innerText = (0.65 + (found.r / 8) * 0.3).toFixed(2) + ' bit';
-        document.getElementById('tt-accel').innerText = '+' + (2.0 + (found.r / 8) * 2.8).toFixed(1) + 'σ';
+        document.getElementById('tt-accel').innerText = '+' + (found.z_score || 0.0).toFixed(1) + 'σ';
         document.getElementById('tt-hops').innerText = `${found.degree || 1} Connected Links`;
-        document.getElementById('tt-bias').innerText = c.bias;
+        document.getElementById('tt-bias').innerText = vState.domain.bias;
 
         tooltip.style.left = e.clientX + 'px';
         tooltip.style.top = e.clientY + 'px';
@@ -562,9 +702,11 @@
       document.getElementById('insp-id').innerText = `ID: ${node.id}`;
       
       const cluster = getClusterMeta(node.cluster);
+      const vState = getNodeVisualState(node);
       const badge = document.getElementById('insp-cluster');
-      badge.innerText = cluster.name.toUpperCase();
-      badge.style.color = cluster.color;
+      badge.innerText = `${cluster.name.toUpperCase()} • ${vState.domain.name.toUpperCase()}`;
+      badge.style.color = vState.domain.hue;
+      badge.style.borderColor = vState.domain.hue + '66';
 
       const hops = activePathEdges.length || 1;
       const dynamicLag = Math.round(hops * 7.5);
@@ -681,6 +823,8 @@
           if (currNodeMap.has(rn.id)) {
             const existing = currNodeMap.get(rn.id);
             existing.label = rn.label;
+            existing.category = rn.category || 'DEFAULT';
+            existing.cluster = rn.cluster;
             existing.degree = rn.degree || 1;
             existing.z_score = rn.z_score || 0.0;
             existing.isSurging = rn.is_surging || (rn.z_score >= 10.0);
@@ -697,6 +841,7 @@
             const newNode = {
               id: rn.id,
               label: rn.label,
+              category: rn.category || 'DEFAULT',
               cluster: rn.cluster,
               degree: rn.degree || 1,
               r: rn.r || (rn.is_surging ? 5.2 : 3.0),
