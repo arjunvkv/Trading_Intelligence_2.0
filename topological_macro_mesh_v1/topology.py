@@ -43,7 +43,16 @@ STOPWORDS = {
     'rises', 'rose', 'falls', 'fell', 'shows', 'shown', 'sees', 'sets', 'puts',
     # Collector template and feed metadata artifacts
     'wikipedia', 'attention', 'inquiries', 'velocity', 'article', 'articles', 'pulse', 'squawk', 'squawks',
-    'guide', 'guides', 'online', 'tools', 'website', 'service', 'services'
+    'guide', 'guides', 'online', 'tools', 'website', 'service', 'services',
+    # Numeric words and quantity counters
+    'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'hundred', 'thousand'
+}
+
+# Recognized 3-letter macro acronyms, sovereign entities, and commodities
+MACRO_3LETTER_ALLOWLIST = {
+    'fed', 'ecb', 'boj', 'gdp', 'cpi', 'pmi', 'sec', 'oil', 'gas',
+    'tax', 'imf', 'wto', 'boc', 'pce', 'ism', 'ppi', 'xau', 'dxy',
+    'ust', 'war', 'aid', 'law', 'fx', 'tar'
 }
 
 CROWD_SOURCES = {'wikimedia attention pulse', 'google crowd autocomplete', 'mastodon decentralized fediverse'}
@@ -87,11 +96,25 @@ class TopologyEngine:
         self.token_first_seen["god_xau"] = now
 
     def _clean_tokens(self, text: str) -> List[str]:
+        # Track uppercase 3-letter acronyms from raw text before lowercasing (e.g. 'CEO', 'TSA', 'BMW', 'ICC', 'WHO')
+        uppercase_3_acronyms = set(re.findall(r'\b[A-Z]{3}\b', text))
+
         # Strip all URLs, domain suffixes, and social handles before tokenizing
         cleaned = re.sub(r'https?://\S+|www\.\S+|\.com|\.org|\.net|\.io|\.co|\.tech|\.de', ' ', text.lower())
         cleaned = re.sub(r'@[a-zA-Z0-9_]+', ' ', cleaned)
         words = re.findall(r'[a-zA-Z]{3,}', cleaned)
-        return [w for w in words if w not in STOPWORDS]
+        
+        filtered = []
+        for w in words:
+            if w in STOPWORDS:
+                continue
+            if len(w) >= 4:
+                filtered.append(w)
+            elif len(w) == 3:
+                # Keep only recognized macro commodities/terms or raw uppercase acronyms
+                if w in MACRO_3LETTER_ALLOWLIST or w.upper() in uppercase_3_acronyms:
+                    filtered.append(w)
+        return filtered
 
     def _extract_ngrams(self, text: str, n_range=(2, 4)) -> List[str]:
         clean_words = self._clean_tokens(text)
@@ -623,8 +646,13 @@ class TopologyEngine:
             pub_count = len(self.token_publishers.get(nid, []))
             mentions = self.token_mentions.get(nid, 0)
 
-            # Single-source orphan with degree <= 1 after 5 minutes: cull!
-            if deg <= 1 and pub_count <= 1 and mentions <= 2 and (now - self.token_first_seen.get(nid, now)) > 300:
+            # Disconnected orphan (deg == 0): cull immediately
+            if deg == 0:
+                cull_nodes.add(nid)
+                continue
+
+            # Single-source leaf with degree <= 1 after 3 minutes: cull
+            if deg <= 1 and pub_count <= 1 and mentions <= 2 and (now - self.token_first_seen.get(nid, now)) > 180:
                 cull_nodes.add(nid)
                 continue
 
