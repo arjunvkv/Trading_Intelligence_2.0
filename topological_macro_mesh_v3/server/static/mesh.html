@@ -404,35 +404,50 @@
 
     let nodes = [];
     let links = [];
+    let nodeMap = new Map();
+
+    let renderRequested = false;
+    let animTime = 0;
+
+    function requestTick() {
+      if (!renderRequested) {
+        renderRequested = true;
+        requestAnimationFrame(() => {
+          renderRequested = false;
+          animTime += 0.0035;
+          ticked();
+        });
+      }
+    }
 
     // Force simulation with galactic separation: tight intra-cluster gravity + inter-cluster lobe repulsion
     const simulation = d3.forceSimulation(nodes)
       .force('link', d3.forceLink(links).id(d => d.id)
         .distance(d => {
-          const s = typeof d.source === 'object' ? d.source : nodes.find(n => n.id === d.source);
-          const t = typeof d.target === 'object' ? d.target : nodes.find(n => n.id === d.target);
+          const s = (typeof d.source === 'object') ? d.source : nodeMap.get(d.source);
+          const t = (typeof d.target === 'object') ? d.target : nodeMap.get(d.target);
           const isSame = s && t && s.cluster !== undefined && s.cluster === t.cluster;
-          return isSame ? (20 + (1 / (d.weight || 0.5)) * 14) : (85 + (1 / (d.weight || 0.5)) * 30);
+          return isSame ? (22 + (1 / (d.weight || 0.5)) * 14) : (90 + (1 / (d.weight || 0.5)) * 30);
         })
         .strength(d => {
-          const s = typeof d.source === 'object' ? d.source : nodes.find(n => n.id === d.source);
-          const t = typeof d.target === 'object' ? d.target : nodes.find(n => n.id === d.target);
+          const s = (typeof d.source === 'object') ? d.source : nodeMap.get(d.source);
+          const t = (typeof d.target === 'object') ? d.target : nodeMap.get(d.target);
           const isSame = s && t && s.cluster !== undefined && s.cluster === t.cluster;
           return isSame ? 0.25 : 0.035;
         })
       )
-      .force('charge', d3.forceManyBody().strength(d => -22 - d.r * 6).distanceMax(450))
+      .force('charge', d3.forceManyBody().strength(d => -20 - d.r * 5).distanceMax(400))
       .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('collision', d3.forceCollide().radius(d => d.r + 2.2).iterations(2))
-      .alphaDecay(0.02)
-      .on('tick', ticked);
+      .force('collision', d3.forceCollide().radius(d => d.r + 2.0).iterations(1))
+      .alphaDecay(0.025)
+      .on('tick', requestTick);
 
     let transform = d3.zoomIdentity;
     const zoom = d3.zoom()
       .scaleExtent([0.15, 8])
       .on('zoom', (event) => {
         transform = event.transform;
-        ticked();
+        requestTick();
       });
 
     d3.select(canvas).call(zoom);
@@ -441,15 +456,8 @@
     let selectedNode = null;
     let activePathEdges = [];
 
-    // Calmed pulse speed (reduced by 75% for slow, meditative travel)
-    let animTime = 0;
-
-    function renderCanvas() {
-      animTime += 0.0035; // Calm, slow pace (was 0.015)
-      ticked();
-      requestAnimationFrame(renderCanvas);
-    }
-    requestAnimationFrame(renderCanvas);
+    // Trigger initial tick
+    requestTick();
 
     function findTransmissionCascade(startNode, maxDepth = 4) {
       if (!startNode) return [];
@@ -487,7 +495,7 @@
       ctx.translate(transform.x, transform.y);
       ctx.scale(transform.k, transform.k);
 
-      // 0. Ambient Celestial Nebulas for Macro Theaters (Communities)
+      // 0. Ambient Celestial Nebulas for Macro Theaters (Only Top 6 Primary Communities)
       const clusterNodesMap = new Map();
       for (const node of nodes) {
         const c = node.cluster !== undefined ? node.cluster : 0;
@@ -495,8 +503,12 @@
         clusterNodesMap.get(c).push(node);
       }
 
-      clusterNodesMap.forEach((cNodes, cIdx) => {
-        if (cNodes.length < 3) return;
+      const topClusters = Array.from(clusterNodesMap.entries())
+        .sort((a, b) => b[1].length - a[1].length)
+        .slice(0, 6);
+
+      for (const [cIdx, cNodes] of topClusters) {
+        if (cNodes.length < 5) continue;
         let sumX = 0, sumY = 0;
         for (const n of cNodes) { sumX += n.x; sumY += n.y; }
         const cx = sumX / cNodes.length;
@@ -507,59 +519,83 @@
           const d = Math.hypot(n.x - cx, n.y - cy);
           if (d > maxDist) maxDist = d;
         }
-        const radius = Math.min(320, Math.max(60, maxDist + 35));
+        const radius = Math.min(300, Math.max(60, maxDist + 30));
         const cMeta = getClusterMeta(cIdx);
 
         const grad = ctx.createRadialGradient(cx, cy, 5, cx, cy, radius);
-        grad.addColorStop(0, cMeta.color + '14');   // 8% opacity center
-        grad.addColorStop(0.5, cMeta.color + '08'); // 3% opacity mid
-        grad.addColorStop(1, 'rgba(0,0,0,0)');      // 0% opacity outer edge
+        grad.addColorStop(0, cMeta.color + '14');
+        grad.addColorStop(0.5, cMeta.color + '06');
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
 
         ctx.beginPath();
         ctx.arc(cx, cy, radius, 0, Math.PI * 2);
         ctx.fillStyle = grad;
         ctx.fill();
-      });
+      }
 
-      // 1. Draw Links with Cohesive Leiden Community Colors
-      const nodeMap = new Map(nodes.map(n => [n.id, n]));
+      // 1. Batched Link Rendering (High-Performance GPU Path Batching)
+      const crossPath = new Path2D();
+      const clusterEdgeMap = new Map();
+      const activePathEdgesList = [];
+
       for (const link of links) {
         const s = typeof link.source === 'object' ? link.source : nodeMap.get(link.source);
         const t = typeof link.target === 'object' ? link.target : nodeMap.get(link.target);
         if (!s || !t || s.x == null || t.x == null) continue;
 
-        ctx.beginPath();
-        ctx.moveTo(s.x, s.y);
-        ctx.lineTo(t.x, t.y);
-
         const isInActivePath = activePathEdges.some(p => p.edge === link || (p.from === s.id && p.to === t.id) || (p.from === t.id && p.to === s.id));
         const isHovered = hoveredNode && (s === hoveredNode || t === hoveredNode);
+
+        if (isInActivePath || isHovered) {
+          activePathEdgesList.push({ s, t, isInActivePath });
+          continue;
+        }
+
         const sCluster = s.cluster !== undefined ? s.cluster : 0;
         const tCluster = t.cluster !== undefined ? t.cluster : 0;
-        const isSameCluster = (sCluster === tCluster);
 
-        if (isInActivePath) {
-          // Highlighted causal transmission highway
-          ctx.strokeStyle = 'rgba(56, 189, 248, 0.9)';
-          ctx.lineWidth = 1.4 / transform.k;
-        } else if (isHovered) {
-          // Hover connection
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
-          ctx.lineWidth = 1.0 / transform.k;
-        } else if (isSameCluster) {
-          // Vibrant intra-community constellation web line (matching reference screenshot)
-          const cCol = getClusterMeta(sCluster).color;
-          ctx.strokeStyle = cCol + '33'; // 20% opacity
-          ctx.lineWidth = 0.75 / transform.k;
+        if (sCluster === tCluster) {
+          const col = getClusterMeta(sCluster).color;
+          if (!clusterEdgeMap.has(col)) clusterEdgeMap.set(col, new Path2D());
+          const p = clusterEdgeMap.get(col);
+          p.moveTo(s.x, s.y);
+          p.lineTo(t.x, t.y);
         } else {
-          // Subtle cross-market inter-community bridge
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
-          ctx.lineWidth = 0.55 / transform.k;
+          crossPath.moveTo(s.x, s.y);
+          crossPath.lineTo(t.x, t.y);
+        }
+      }
+
+      // Draw subtle cross-community links in one single draw call
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.10)';
+      ctx.lineWidth = 0.55 / transform.k;
+      ctx.stroke(crossPath);
+
+      // Draw community links grouped by palette color in batch
+      ctx.lineWidth = 0.75 / transform.k;
+      for (const [col, path] of clusterEdgeMap) {
+        ctx.strokeStyle = col + '33';
+        ctx.stroke(path);
+      }
+
+      // Draw active / hovered paths on top
+      for (const item of activePathEdgesList) {
+        ctx.beginPath();
+        ctx.moveTo(item.s.x, item.s.y);
+        ctx.lineTo(item.t.x, item.t.y);
+        if (item.isInActivePath) {
+          ctx.strokeStyle = 'rgba(56, 189, 248, 0.95)';
+          ctx.lineWidth = 1.4 / transform.k;
+        } else {
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+          ctx.lineWidth = 1.1 / transform.k;
         }
         ctx.stroke();
       }
 
-      // 2. Draw Nodes (Pure Leiden Modularity Colors with Radiant Hawkes Physics)
+      // 2. Draw Nodes (Pure Leiden Modularity Colors - Clean & Ultra-Fast)
+      const highlightedNodes = [];
+
       for (const node of nodes) {
         const cMeta = getClusterMeta(node.cluster);
         const isSelected = (selectedNode === node);
@@ -567,16 +603,31 @@
         const z = node.z_score || 0.0;
         const isShock = (node.isSurging && z >= 12.0);
 
-        // Concentric expanding shockwave radar rings for extreme outliers (Z >= 12.0σ)
+        if (isSelected || isHovered || isShock) {
+          highlightedNodes.push({ node, cMeta, isSelected, isHovered, isShock, z });
+          continue;
+        }
+
+        // Fast path for standard nodes: no shadowBlur, direct arc + fill
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, node.r, 0, Math.PI * 2);
+        ctx.fillStyle = cMeta.color;
+        ctx.fill();
+      }
+
+      // Draw highlighted/shock nodes on top with glowing aura
+      for (const item of highlightedNodes) {
+        const { node, cMeta, isSelected, isHovered, isShock } = item;
+        const baseR = (isHovered || isSelected ? node.r * 1.5 : node.r);
+
+        // Expanding shockwave radar rings for extreme outliers (Z >= 12.0σ)
         if (isShock) {
-          // Inner concentric ring
           ctx.beginPath();
           ctx.arc(node.x, node.y, node.r + 3.2, 0, Math.PI * 2);
           ctx.strokeStyle = cMeta.color;
           ctx.lineWidth = 1.2 / transform.k;
           ctx.stroke();
 
-          // Expanding soft breathing radar wavefront
           const ringRad = node.r + 4 + ((animTime * 12) % 20);
           const ringOpacity = Math.max(0, 0.55 - (ringRad / 30));
           ctx.beginPath();
@@ -586,9 +637,7 @@
           ctx.stroke();
         }
 
-        // Node Body
         ctx.beginPath();
-        const baseR = (isHovered || isSelected ? node.r * 1.5 : node.r);
         ctx.arc(node.x, node.y, baseR, 0, Math.PI * 2);
 
         if (isSelected) {
@@ -600,23 +649,13 @@
           ctx.shadowColor = cMeta.color;
           ctx.shadowBlur = 10;
         } else if (isShock) {
-          // White-hot core for shock ignition outliers
           ctx.fillStyle = '#ffffff';
           ctx.shadowColor = cMeta.color;
           ctx.shadowBlur = 12;
-        } else {
-          ctx.fillStyle = cMeta.color;
-          if (z >= 4.0) {
-            ctx.shadowColor = cMeta.color;
-            ctx.shadowBlur = 6;
-          } else {
-            ctx.shadowBlur = 0;
-          }
         }
 
         ctx.fill();
 
-        // White-hot core border ring
         if (isShock && !isSelected && !isHovered) {
           ctx.strokeStyle = cMeta.color;
           ctx.lineWidth = 1.6 / transform.k;
@@ -624,32 +663,6 @@
         }
 
         ctx.shadowBlur = 0;
-      }
-
-      // 3. Crisp Typography Labels for Key Anchor Hubs & Active Selections
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'top';
-      for (const node of nodes) {
-        const isSelected = (selectedNode === node);
-        const isHovered = (hoveredNode === node);
-        const z = node.z_score || 0.0;
-        const isAnchor = (node.degree || 1) >= 40 || (node.isSurging && z >= 12.0);
-
-        if (isSelected || isHovered || isAnchor) {
-          const cMeta = getClusterMeta(node.cluster);
-          const fontSize = Math.max(9, Math.min(13, (isSelected || isHovered ? 12 : 10) / Math.sqrt(transform.k || 1)));
-          ctx.font = `${isSelected || isHovered ? '600' : '500'} ${fontSize}px ui-sans-serif, system-ui, -apple-system, sans-serif`;
-
-          const labelText = node.label;
-          const textY = node.y + (isSelected || isHovered ? node.r * 1.5 + 4 : node.r + 3);
-
-          // Dark halo for contrast against cosmic background
-          ctx.shadowColor = '#000000';
-          ctx.shadowBlur = 4;
-          ctx.fillStyle = (isSelected || isHovered) ? '#ffffff' : '#cbd5e1';
-          ctx.fillText(labelText, node.x, textY);
-          ctx.shadowBlur = 0;
-        }
       }
 
       ctx.restore();
@@ -708,7 +721,10 @@
       }
 
       if (found) {
-        hoveredNode = found;
+        if (hoveredNode !== found) {
+          hoveredNode = found;
+          requestTick();
+        }
         const c = getClusterMeta(found.cluster);
         document.getElementById('tt-title').innerText = found.label;
         document.getElementById('tt-cluster').innerText = c.name.toUpperCase();
@@ -731,6 +747,7 @@
       } else {
         if (hoveredNode) {
           hoveredNode = null;
+          requestTick();
           tooltip.style.opacity = '0';
         }
       }
@@ -821,12 +838,14 @@
       }
 
       drawer.classList.remove('translate-x-[440px]');
+      requestTick();
     }
 
     function closeInspector() {
       selectedNode = null;
       activePathEdges = [];
       document.getElementById('inspector').classList.add('translate-x-[440px]');
+      requestTick();
     }
 
     function focusCluster(cIdx) {
@@ -949,10 +968,12 @@
         if (linksChanged || nodesChanged) {
           links.length = 0;
           newLinks.forEach(l => links.push(l));
+          nodeMap = new Map(nodes.map(n => [n.id, n]));
           simulation.nodes(nodes);
           simulation.force('link').links(links);
           simulation.alpha(0.08).restart();
         }
+        requestTick();
 
         const surgeCount = nodes.filter(n => n.isSurging).length;
 
