@@ -16,7 +16,11 @@ print(f"Total Nodes: {len(nodes)}")
 print(f"Total Links: {len(links)}")
 print(f"Total Communities: {len(communities)}")
 print(f"Total Precursor Clues: {len(clues)}")
-print(f"Primary Driver: {driver.get('headline')}")
+print("\n--- Top Discovered Leiden Communities ---")
+for c in communities[:10]:
+    c_name = c.get('name', 'Community')
+    c_size = c.get('size', 0)
+    print(f"  * [C#{c.get('id')}] {c_name} (Size: {c_size})")
 
 # Category breakdown
 categories = Counter(n.get("category", "UNKNOWN") for n in nodes)
