@@ -23,7 +23,10 @@ class GeopoliticalWiresCollector:
         {"name": "Middle East Security & Military Fronts", "url": "https://news.google.com/rss/search?q=%22missile+strike%22+OR+%22naval+blockade%22+OR+%22drone+attack%22+OR+%22ceasefire+talks%22+when:1d&hl=en-US&gl=US&ceid=US:en"},
         {"name": "Asia-Pacific & Taiwan Strait Wires", "url": "https://news.google.com/rss/search?q=%22Taiwan+Strait%22+OR+%22South+China+Sea%22+OR+%22semiconductor+sanctions%22+OR+%22rare+earths%22+when:1d&hl=en-US&gl=US&ceid=US:en"},
         {"name": "Eastern Europe & NATO Defense", "url": "https://news.google.com/rss/search?q=%22NATO+defense%22+OR+%22Black+Sea+grain%22+OR+%22sanctions+evasion%22+OR+%22border+skirmish%22+when:1d&hl=en-US&gl=US&ceid=US:en"},
-        {"name": "Critical Minerals & Supply Disruptions", "url": "https://news.google.com/rss/search?q=%22rare+earths+export%22+OR+%22lithium+nationalization%22+OR+%22uranium+supply%22+OR+%22copper+mine+strike%22+when:1d&hl=en-US&gl=US&ceid=US:en"}
+        {"name": "Critical Minerals & Supply Disruptions", "url": "https://news.google.com/rss/search?q=%22rare+earths+export%22+OR+%22lithium+nationalization%22+OR+%22uranium+supply%22+OR+%22copper+mine+strike%22+when:1d&hl=en-US&gl=US&ceid=US:en"},
+        {"name": "Nikkei Asia Macro & Central Banks", "url": "https://news.google.com/rss/search?q=site:asia.nikkei.com+OR+%22Nikkei+Asia%22+OR+%22Bank+of+Japan%22+when:2d&hl=en-US&gl=US&ceid=US:en"},
+        {"name": "South China Morning Post Macro & Trade", "url": "https://news.google.com/rss/search?q=site:scmp.com+OR+%22South+China+Morning+Post%22+OR+%22PBOC%22+when:2d&hl=en-US&gl=US&ceid=US:en"},
+        {"name": "TASS Diplomatic & Energy Vectors", "url": "https://news.google.com/rss/search?q=site:tass.com+OR+%22TASS%22+OR+%22Russian+Central+Bank%22+when:2d&hl=en-US&gl=US&ceid=US:en"}
     ]
 
     def __init__(self, request_timeout: float = 6.0):

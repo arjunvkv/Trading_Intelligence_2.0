@@ -30,7 +30,10 @@ class SovereignWiresCollector:
         {"name": "US Treasury Debt & Auctions", "url": "https://news.google.com/rss/search?q=%22US+Treasury%22+OR+%22Treasury+auction%22+OR+%22bid-to-cover%22+OR+%22Treasury+yields%22+OR+%22debt+ceiling%22&hl=en-US&gl=US&ceid=US:en"},
         {"name": "Global Sovereign FX Reserves & Swaps", "url": "https://news.google.com/rss/search?q=%22foreign+exchange+reserves%22+OR+%22bilateral+swap+line%22+OR+%22sovereign+debt+default%22+OR+%22de-dollarization%22&hl=en-US&gl=US&ceid=US:en"},
         {"name": "Central Bank Liquidity Facilities", "url": "https://news.google.com/rss/search?q=%22reverse+repo%22+OR+%22discount+window%22+OR+%22liquidity+facility%22+OR+%22emergency+lending%22&hl=en-US&gl=US&ceid=US:en"},
-        {"name": "BRICS & De-Dollarization Architecture", "url": "https://news.google.com/rss/search?q=%22BRICS+Pay%22+OR+%22cross-border+settlement%22+OR+%22alternative+currency%22+OR+%22mBridge%22&hl=en-US&gl=US&ceid=US:en"}
+        {"name": "BRICS & De-Dollarization Architecture", "url": "https://news.google.com/rss/search?q=%22BRICS+Pay%22+OR+%22cross-border+settlement%22+OR+%22alternative+currency%22+OR+%22mBridge%22&hl=en-US&gl=US&ceid=US:en"},
+        {"name": "Emirates News Agency WAM Sovereign", "url": "https://news.google.com/rss/search?q=%22Emirates+News+Agency%22+OR+site:wam.ae+OR+%22UAE+central+bank%22+when:2d&hl=en-US&gl=US&ceid=US:en"},
+        {"name": "Saudi Press Agency SPA Energy Desk", "url": "https://news.google.com/rss/search?q=%22Saudi+Press+Agency%22+OR+site:spa.gov.sa+OR+%22Saudi+Aramco%22+when:2d&hl=en-US&gl=US&ceid=US:en"},
+        {"name": "OECD Sovereign Debt & Borrowing", "url": "https://news.google.com/rss/search?q=%22OECD%22+OR+%22sovereign+borrowing%22+OR+%22global+debt+outlook%22+when:3d&hl=en-US&gl=US&ceid=US:en"}
     ]
 
     def __init__(self, request_timeout: float = 6.0):

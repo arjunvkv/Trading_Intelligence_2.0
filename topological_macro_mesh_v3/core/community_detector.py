@@ -8,7 +8,7 @@ from typing import Dict, List, Tuple, Any, Set, Union
 import networkx as nx
 
 class CommunityDetector:
-    def __init__(self, resolution: float = 1.0):
+    def __init__(self, resolution: float = 0.55):
         self.resolution = resolution
 
     def detect_communities(
@@ -18,6 +18,7 @@ class CommunityDetector:
     ) -> Tuple[Dict[str, int], Dict[int, str]]:
         """
         Runs modularity optimization on the active topological graph.
+        Consolidates micro-islands (|C| < 3) into strongest adjacent macro constellations.
         Returns:
             node_partition: {node_id: community_id}
             community_names: {community_id: community_name}
@@ -46,18 +47,57 @@ class CommunityDetector:
             return node_partition, community_names
 
         try:
-            # High-performance Louvain community detection
-            detected = nx.community.louvain_communities(G_undir, weight="weight", resolution=self.resolution, seed=42)
+            # High-performance Louvain community detection with macro resolution (0.55)
+            raw_detected = list(nx.community.louvain_communities(G_undir, weight="weight", resolution=self.resolution, seed=42))
         except Exception:
             try:
-                detected = nx.community.greedy_modularity_communities(G_undir, weight="weight")
+                raw_detected = list(nx.community.greedy_modularity_communities(G_undir, weight="weight"))
             except Exception:
-                detected = [set(c) for c in nx.connected_components(G_undir)]
+                raw_detected = [set(c) for c in nx.connected_components(G_undir)]
+
+        # Separate into major clusters (>=3 members) and micro-islands (<3 members)
+        major_clusters = [set(c) for c in raw_detected if len(c) >= 3]
+        micro_islands = [set(c) for c in raw_detected if len(c) < 3]
+
+        # If no major clusters exist, all are kept as is
+        if not major_clusters:
+            major_clusters = micro_islands
+            micro_islands = []
+
+        # Merge micro-islands into their strongest connected major cluster
+        unconnected_islands = []
+        for island in micro_islands:
+            best_cluster_idx = -1
+            best_weight = 0.0
+
+            for m in island:
+                if not G_undir.has_node(m):
+                    continue
+                for nbr in G_undir.neighbors(m):
+                    edge_w = G_undir[m][nbr].get("weight", 1.0)
+                    for c_idx, c_members in enumerate(major_clusters):
+                        if nbr in c_members:
+                            if edge_w > best_weight:
+                                best_weight = edge_w
+                                best_cluster_idx = c_idx
+
+            if best_cluster_idx >= 0 and best_weight > 0:
+                major_clusters[best_cluster_idx].update(island)
+            else:
+                unconnected_islands.append(island)
+
+        # Merge remaining isolated singletons into a peripheral constellation if any
+        if unconnected_islands:
+            combined_periphery = set()
+            for island in unconnected_islands:
+                combined_periphery.update(island)
+            if combined_periphery:
+                major_clusters.append(combined_periphery)
 
         node_partition: Dict[str, int] = {}
         community_names: Dict[int, str] = {}
 
-        for c_idx, member_set in enumerate(detected):
+        for c_idx, member_set in enumerate(major_clusters):
             members = list(member_set)
             for m in members:
                 node_partition[m] = c_idx
@@ -82,3 +122,4 @@ class CommunityDetector:
             community_names[c_idx] = name
 
         return node_partition, community_names
+

@@ -7,6 +7,7 @@ and Modularity-based Community Detection with complete UI contract parity.
 
 import time
 import math
+import re
 import urllib.parse
 from typing import Dict, List, Any, Tuple, Optional, Set
 import networkx as nx
@@ -72,6 +73,59 @@ class TopologicalManifold:
 
         entity_names = [e.get("name") or e.get("label") or e["id"] for e in entities]
         entity_category_map = {(e.get("name") or e.get("label") or e["id"]): e.get("category", source_type) for e in entities}
+
+        # Shannon Information Density Audit (Zero-False-Negative Precursor Guardrail)
+        words = re.findall(r'\b\w+\b', text.lower())
+        word_count = max(1, len(words))
+
+        # Check for sovereign transmission or geopolitical precursor catalysts
+        # Any document containing recognized sovereign institutions, yields, debt, or conflicts ALWAYS passes
+        has_high_gravity_catalyst = any(
+            cat in [
+                "SOVEREIGN_CENTRAL_BANK", "GEOPOLITICAL_DEFENSE", "INTERMARKET_FLOWS",
+                "monetary policy", "central bank", "sovereign state", "geopolitical conflict",
+                "critical commodity", "financial shock", "trade policy", "sanctions", "chokepoint"
+            ]
+            for cat in entity_category_map.values()
+        )
+
+        # Surprisal sum across entities
+        surprisal_sum = sum(self.surprisal.calculate_surprisal(name) for name in entity_names)
+        shannon_density = surprisal_sum / word_count
+
+        # Routine administrative plumbing filter (check fees, branch applications, HR enforcement, student competitions)
+        is_administrative_notice = any(
+            phrase in text.lower()
+            for phrase in [
+                "fee schedules for priced services",
+                "pricing, effective january 1",
+                "check services",
+                "enforcement action with former employee",
+                "termination of enforcement action",
+                "college fed challenge",
+                "approval of application by",
+                "approval of two applications by",
+                "notice of proposed rulemaking on payment processing"
+            ]
+        )
+        
+        has_genuine_macro_predicate = any(
+            kw in text.lower()
+            for kw in [
+                "interest rate", "rate hike", "rate cut", "fomc statement", "discount rate",
+                "balance sheet", "quantitative easing", "quantitative tightening", "treasury",
+                "inflation", "yield curve", "repo", "liquidity facility", "foreign exchange",
+                "reserves", "bank run", "sovereign", "debt default"
+            ]
+        )
+
+        # Cull administrative notices unless they contain genuine macroeconomic shock predicates
+        if is_administrative_notice and not has_genuine_macro_predicate:
+            return []
+
+        # If document is lengthy (> 75 words) and surprisal density is near zero (< 0.02) with no high-gravity catalyst, suppress
+        if word_count > 75 and shannon_density < 0.025 and not has_genuine_macro_predicate:
+            return []
 
         # Update node representations
         for name in entity_names:

@@ -47,7 +47,7 @@ class MacroEntityExtractor:
         "yield", "yields", "default", "defaults", "blockade", "ceasefire", "debasement",
         "liquidity", "reserves", "deficit", "surplus", "embargo", "subsidies", "contagion",
         "downgrade", "bailout", "refinancing", "inversion", "spreads", "petrodollar",
-        "clearing", "swaps", "collateral", "chokepoint", "pipeline", "uranium", "copper",
+        "swaps", "collateral", "chokepoint", "pipeline", "uranium", "copper",
         "lithium", "cobalt", "semiconductor", "semiconductors", "debt ceiling", "quantitative easing",
         "quantitative tightening", "reverse repo", "foreign exchange", "capital flight", "bank run",
         "de-dollarization", "currency war", "trade war", "export controls", "rare earths",
