@@ -300,6 +300,27 @@ class DataCollector:
         items.extend(self.fetch_rss_items("https://feeds.content.dowjones.io/public/rss/mw_topstories", "MarketWatch Wire", max_items=6, ttl_seconds=120.0))
         return items
 
+    def fetch_physical_bullion_and_vault_wires(self) -> List[Dict[str, str]]:
+        """
+        Dimension 4: Physical Bullion, Vault Inventories, Exchange Clearings & Sovereign Reserves.
+        Captures daily COMEX deliverable vault inventory drawdowns, Shanghai Gold Exchange (SGE)
+        cash premiums/discounts, LBMA physical clearings, and central bank bullion reserve acquisitions.
+        """
+        wires = []
+        # 1. Physical Exchanges & Vault Clearing (COMEX Vaults, SGE Fixing, LBMA, Physical Bullion)
+        url_exchanges = "https://news.google.com/rss/search?q=when:24h+(%22Shanghai+Gold+Exchange%22+OR+SGE+OR+%22COMEX+vault%22+OR+%22LBMA+clearing%22+OR+%22vault+inventory%22+OR+%22physical+gold%22)&hl=en-US&gl=US&ceid=US:en"
+        wires.extend(self.fetch_rss_items(url_exchanges, "Physical Bullion & Vault Exchanges", max_items=10, ttl_seconds=180.0))
+
+        # 2. Sovereign Official Central Bank Reserves & Bullion Allocations
+        url_reserves = "https://news.google.com/rss/search?q=when:24h+(%22gold+reserves%22+OR+%22bullion+purchase%22+OR+%22central+bank+gold%22+OR+%22monetary+gold%22)&hl=en-US&gl=US&ceid=US:en"
+        wires.extend(self.fetch_rss_items(url_reserves, "Sovereign Gold Reserve Dispatches", max_items=8, ttl_seconds=180.0))
+
+        # 3. Primary Mining Supply & Refinery Disruptions
+        url_mining = "https://news.google.com/rss/search?q=when:24h+(%22gold+production%22+OR+%22gold+mine%22+OR+%22mine+supply%22+OR+%22refinery%22+AND+gold)&hl=en-US&gl=US&ceid=US:en"
+        wires.extend(self.fetch_rss_items(url_mining, "Mining & Refinery Supply Front", max_items=8, ttl_seconds=180.0))
+
+        return wires
+
     def fetch_wikipedia_crowd_pageviews(self, dynamic_topics: List[str] = None) -> List[Dict[str, str]]:
         """Wikimedia Public Attention API: measures real-time crowd research on dynamic emerging macro nodes."""
         posts = []
@@ -501,11 +522,12 @@ class DataCollector:
         sovereign = self.fetch_sovereign_wires()
         geopolitical = self.fetch_geopolitical_precursor_wires(dynamic_query=dynamic_search_query)
         market = self.fetch_intermarket_wires()
+        physical = self.fetch_physical_bullion_and_vault_wires()
 
         # If dynamic_seeds not supplied by topology graph, derive dynamically from freshly fetched wire headlines!
         if not dynamic_seeds:
             from collections import Counter
-            all_text = " ".join([item.get("text", "") for item in sovereign + geopolitical + market])
+            all_text = " ".join([item.get("text", "") for item in sovereign + geopolitical + market + physical])
             COMMON_FILTER = {
                 'the', 'and', 'for', 'that', 'this', 'with', 'from', 'have', 'were', 'which', 'about',
                 'news', 'today', 'daily', 'report', 'update', 'brief', 'market', 'price', 'rates', 'said',
@@ -525,6 +547,7 @@ class DataCollector:
             "sovereign_wires": sovereign,
             "geopolitical_wires": geopolitical,
             "market_wires": market,
+            "physical_wires": physical,
             "crowd_discussions": crowd,
             "collector_health": health
         }

@@ -49,6 +49,7 @@ class EngineService:
             self.topology.ingest_stream_items(snapshot.get("sovereign_wires", []), is_crowd=False)
             self.topology.ingest_stream_items(snapshot.get("geopolitical_wires", []), is_crowd=False)
             self.topology.ingest_stream_items(snapshot.get("market_wires", []), is_crowd=False)
+            self.topology.ingest_stream_items(snapshot.get("physical_wires", []), is_crowd=False)
             self.topology.ingest_stream_items(snapshot.get("crowd_discussions", []), is_crowd=True)
 
             # 3. Export latest graph (runs mathematical prune & orphan cull)

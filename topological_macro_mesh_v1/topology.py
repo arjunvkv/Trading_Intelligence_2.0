@@ -64,7 +64,8 @@ INVARIANT_MACRO_CORE = {
     'fed', 'rates', 'rate', 'dollar', 'gold', 'yield', 'yields', 'inflation',
     'treasury', 'treasuries', 'debt', 'bank', 'banks', 'central', 'oil', 'crude',
     'war', 'sanctions', 'bonds', 'reserve', 'reserves', 'deficit', 'liquidity',
-    'tariff', 'tariffs', 'bullion', 'xau', 'dxy', 'tips', 'recession', 'debasement'
+    'tariff', 'tariffs', 'bullion', 'xau', 'dxy', 'tips', 'recession', 'debasement',
+    'comex', 'sge', 'lbma', 'vault', 'inventory', 'refinery', 'premium'
 }
 
 CROWD_SOURCES = {'wikimedia attention pulse', 'google crowd autocomplete', 'mastodon decentralized fediverse'}
