@@ -37,6 +37,8 @@ STOPWORDS = {
     'monthly', 'update', 'brief', 'report', 'news', 'breaking', 'latest'
 }
 
+CROWD_SOURCES = {'wikimedia attention pulse', 'google crowd autocomplete', 'mastodon decentralized fediverse'}
+
 class TopologyEngine:
     def __init__(self, half_life_seconds: float = 7200.0): # 2-hour half life
         self.half_life = half_life_seconds
@@ -193,9 +195,8 @@ class TopologyEngine:
                         self.edges[key]["last_seen"] = now
 
             # 4. Empirical Natural Gold Linkage (Pointwise Mutual Information - PMI)
-            # Forms dynamic mathematical association without forced weights or single-token bugs
-            article_lower = " " + text.lower() + " "
-            is_gold_doc = any(k in article_lower for k in [' gold ', ' bullion ', ' xau ', ' comex ', ' sge ', ' precious metal '])
+            # Forms dynamic mathematical association through genuine Gold tokens and COMEX wire sources
+            is_gold_doc = ("gold" in tokens or "Gold" in source or "god_xau" in tokens)
             if is_gold_doc:
                 if is_new_item:
                     self.gold_docs_seen += 1
@@ -709,6 +710,7 @@ class TopologyEngine:
 
             # Extract verification and provenance
             pubs = list(self.token_publishers.get(nid, []))
+            is_crowd = (len(pubs) > 0 and all(p.lower() in CROWD_SOURCES or 'crowd' in p.lower() or 'search' in p.lower() or 'wiki' in p.lower() or 'mastodon' in p.lower() for p in pubs))
             trig_query = d.get("trigger_text", nid)
             q_google = urllib.parse.quote(trig_query[:100])
             q_x = urllib.parse.quote(nid)
@@ -720,6 +722,7 @@ class TopologyEngine:
                 "z_score": d["z_score"],
                 "is_surging": d.get("is_surging", False),
                 "is_god": d.get("is_god", False),
+                "is_crowd": is_crowd,
                 "r": d.get("r", 3.0),
                 "trigger_text": d.get("trigger_text", ""),
                 "trigger_source": d.get("trigger_source", ""),

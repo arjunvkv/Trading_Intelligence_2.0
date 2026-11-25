@@ -806,7 +806,7 @@
         }
 
         // Fetch Real Telemetry & Dual-Key Arbiter Decision
-        fetch('/api/telemetry?cluster=Sovereign+%26+Central+Banks&z=3.5&hops=1')
+        fetch('/api/telemetry?z=3.5&hops=1')
           .then(r => r.json())
           .then(tel => {
             const attDivEl = document.getElementById('hud-att-div');

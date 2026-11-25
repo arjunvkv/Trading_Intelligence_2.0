@@ -62,9 +62,9 @@ class EngineService:
             self.latest_graph = self.topology.export_graph_json()
             self.latest_graph["collector_health"] = snapshot.get("collector_health", {})
             
-            # 4. Compute Attention Divergence
-            wire_z = [n["z_score"] for n in self.latest_graph.get("nodes", []) if n.get("cluster") in [0, 1, 2] and not n.get("is_god")]
-            crowd_z = [n["z_score"] for n in self.latest_graph.get("nodes", []) if n.get("cluster") in [4] and not n.get("is_god")]
+            # 4. Compute Attention Divergence (Strict Mathematical Provenance: Wires vs Crowd)
+            wire_z = [n["z_score"] for n in self.latest_graph.get("nodes", []) if not n.get("is_crowd") and not n.get("is_god")]
+            crowd_z = [n["z_score"] for n in self.latest_graph.get("nodes", []) if n.get("is_crowd") and not n.get("is_god")]
             att_div = self.arbiter.calculate_attention_divergence(wire_z, crowd_z)
 
             self.latest_decision = {
@@ -413,8 +413,8 @@ class MeshHTTPHandler(http.server.SimpleHTTPRequestHandler):
             hops = int(query.get('hops', [2])[0])
 
             nodes = engine_service.latest_graph.get("nodes", [])
-            wire_z = [n["z_score"] for n in nodes if n.get("cluster") in [0, 3] and not n.get("is_god")]
-            crowd_z = [n["z_score"] for n in nodes if n.get("cluster") in [1, 4] and not n.get("is_god")]
+            wire_z = [n["z_score"] for n in nodes if not n.get("is_crowd") and not n.get("is_god")]
+            crowd_z = [n["z_score"] for n in nodes if n.get("is_crowd") and not n.get("is_god")]
 
             res = engine_service.arbiter.evaluate_shock_telemetry(cluster, z, hops, wire_z, crowd_z)
             res["latest_decision"] = engine_service.latest_decision

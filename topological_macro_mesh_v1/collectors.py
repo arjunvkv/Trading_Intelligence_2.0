@@ -355,11 +355,8 @@ class DataCollector:
         
         search_seeds = [s for s in dynamic_seeds if len(s) >= 3 and not s.isdigit()][:5]
 
-        # Mathematical Shannon Information & Lexical Density Filter
-        # Rejects lexicographical/dictionary inquiries and low-entropy noise universally without language whitelists
-        LEXICOGRAPHICAL_MARKERS = {'meaning', 'definition', 'pronunciation', 'synonym', 'translate', 'translation', 'lyrics', 'cast', 'download', 'pdf'}
-        FUNCTION_WORDS = {'the', 'and', 'for', 'with', 'from', 'this', 'that', 'what', 'which', 'where', 'when', 'why', 'how', 'who', 'are', 'was', 'were'}
-
+        # Mathematical Shannon Character Entropy & Lexical Density Filter
+        # Rejects low-entropy dictionary lookups, repetitive searches, and trivial single-word noise without keyword lists
         for seed in search_seeds:
             url = f"https://suggestqueries.google.com/complete/search?client=firefox&q={urllib.parse.quote(seed)}"
             raw_sugg = self._fetch_safe(url, "Google Crowd Autocomplete", timeout=4)
@@ -369,14 +366,17 @@ class DataCollector:
                     suggestions = sugg_data[1] if len(sugg_data) > 1 else []
                     for phrase in suggestions[:3]:
                         if phrase and len(phrase) > 8:
-                            words = set(re.findall(r'[a-zA-Z]{2,}', phrase.lower()))
-                            # 1. Reject lexicographical and entertainment dictionary queries universally
-                            if any(m in words for m in LEXICOGRAPHICAL_MARKERS):
+                            # 1. Shannon Character Entropy H(S)
+                            from collections import Counter
+                            c_counts = Counter(phrase.lower())
+                            p_len = len(phrase)
+                            entropy = -sum((cnt / p_len) * math.log2(cnt / p_len) for cnt in c_counts.values())
+                            if entropy < 2.9: # Low-entropy repetitive text or trivial lookup
                                 continue
-                            
-                            # 2. Information Density: require at least 2 substantive non-function words
-                            content_words = [w for w in words if len(w) >= 3 and w not in FUNCTION_WORDS]
-                            if len(content_words) < 2:
+
+                            words = [w for w in re.findall(r'[a-zA-Z]{3,}', phrase.lower())]
+                            # Require at least 2 distinct substantive words
+                            if len(set(words)) < 2:
                                 continue
 
                             posts.append({
