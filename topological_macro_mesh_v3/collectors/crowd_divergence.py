@@ -1,11 +1,12 @@
 """
 CROWD DIVERGENCE & REAL-TIME CROWD PULSE COLLECTOR (ZERO HARDCODES)
 Gathers authentic minute-by-minute crowd discussions, retail sentiment pulses,
-and high-frequency micro-breaking wires from live financial streams:
-1. StockTwits Live Retail Crowd Streams ($GLD, $SLV, $USO, $DXY, $TLT, $TNX, $SPY, $QQQ, $VIX, $UUP, $CPER, $UNG, $XLE, $XLF, $DBA, $GDX)
-2. TradingView Real-Time Community Theses & Ideas
-3. Rapid Micro-Breaking Financial Desks (Dow Jones, WSJ Markets, CNBC, Investing.com, FXStreet, ZeroHedge, MarketWatch)
-4. High-Velocity 1-Hour Breaking Macro Wires (when:1h Gold, Yields, Sanctions, Energy)
+and high-frequency micro-breaking wires from live financial and OSINT streams:
+1. Telegram Public OSINT & Ground-Truth Wires (Insider Paper, FinancialJuice, Clash Report, OSINTdefender, Spectator Index, RT News)
+2. StockTwits Live Retail Crowd Streams & Global Trending Streams
+3. TradingView Real-Time Community Theses & Ideas
+4. Rapid Micro-Breaking Financial Desks (Dow Jones, WSJ Markets, CNBC, Investing.com, FXStreet, ZeroHedge, MarketWatch)
+5. High-Velocity 1-Hour Breaking Macro Wires (when:1h Gold, Yields, Sanctions, Energy)
 
 Every post contains its true, authentic epoch timestamp, publisher attribution, and raw narrative telemetry.
 """
@@ -19,14 +20,25 @@ import calendar
 import concurrent.futures
 import ssl
 import re
+import html
 from datetime import datetime, timezone
 from typing import List, Dict, Any
 import feedparser
 
 class CrowdDivergenceCollector:
+    TELEGRAM_CHANNELS = [
+        ("Insider Paper Breaking", "insiderpaper"),
+        ("FinancialJuice Live Wire", "financialjuice"),
+        ("Clash Report OSINT", "clashreport"),
+        ("OSINTdefender Radar", "osintdefender"),
+        ("The Spectator Index Wire", "spectatorindex"),
+        ("RT World Pulse", "rtnews")
+    ]
+
     STOCKTWITS_SYMBOLS = [
         "GLD", "SLV", "USO", "DXY", "TLT", "TNX", "SPY", "QQQ",
-        "VIX", "UUP", "CPER", "UNG", "XLE", "XLF", "DBA", "GDX"
+        "VIX", "UUP", "CPER", "UNG", "XLE", "XLF", "DBA", "GDX",
+        "USDJPY", "EURUSD", "HYG", "LQD", "BNO", "URA", "BTC.X"
     ]
 
     COMMUNITY_THEMES = [
@@ -53,10 +65,61 @@ class CrowdDivergenceCollector:
     def __init__(self, request_timeout: float = 2.5):
         self.request_timeout = request_timeout
         self.headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Connection": "close"
         }
         self.ssl_context = ssl._create_unverified_context()
         self.seen_post_ids = set()
+
+    def _fetch_telegram_channel(self, name: str, channel: str) -> List[Dict[str, Any]]:
+        """
+        Polls open public web preview mirror of Telegram channels (t.me/s/<channel>).
+        Zero API keys required. Extracts raw unedited chronological eyewitness messages with timestamps.
+        """
+        docs = []
+        url = f"https://t.me/s/{channel}"
+        now = time.time()
+        try:
+            req = urllib.request.Request(url, headers=self.headers)
+            with urllib.request.urlopen(req, timeout=self.request_timeout + 0.8, context=self.ssl_context) as resp:
+                content = resp.read().decode("utf-8", errors="ignore")
+
+            times = re.findall(r'datetime=[\'"]([^\'"]+)[\'"]', content)
+            texts = re.findall(r'tgme_widget_message_text[^>]*>(.*?)</div>', content, re.DOTALL)
+
+            for t_str, raw_text in zip(times, texts):
+                clean_text = re.sub(r'<[^>]+>', ' ', raw_text).strip()
+                clean_text = html.unescape(clean_text)
+                clean_text = clean_text.replace('\u200e', '').replace('\u200f', '').strip()
+                if len(clean_text) < 15:
+                    continue
+
+                try:
+                    dt = datetime.fromisoformat(t_str.replace('Z', '+00:00'))
+                    ts = dt.timestamp()
+                except Exception:
+                    ts = now
+
+                age_sec = max(0.0, now - ts)
+                # Keep strictly within 2 hours
+                if age_sec > 7200.0:
+                    continue
+
+                docs.append({
+                    "title": clean_text[:280],
+                    "summary": f"{name} Telemetry: {clean_text}",
+                    "publisher": name,
+                    "source_type": "TELEGRAM_OSINT",
+                    "link": f"https://t.me/{channel}",
+                    "published": t_str,
+                    "published_at": ts,
+                    "timestamp": ts,
+                    "age_sec": age_sec
+                })
+        except Exception:
+            pass
+        return docs
 
     def _fetch_stocktwits_symbol(self, sym: str) -> List[Dict[str, Any]]:
         docs = []
@@ -73,7 +136,6 @@ class CrowdDivergenceCollector:
                 if not body or len(body) < 15:
                     continue
 
-                # Parse created_at timestamp: e.g. "2026-11-26T07:30:40Z"
                 created_str = m.get("created_at", "")
                 try:
                     dt = datetime.strptime(created_str, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
@@ -82,11 +144,9 @@ class CrowdDivergenceCollector:
                     ts = now
 
                 age_sec = max(0.0, now - ts)
-                # Keep posts strictly within last 2 hours for maximum freshness
                 if age_sec > 7200.0:
                     continue
 
-                # Strip multiple URLs from body for clean display
                 clean_body = re.sub(r'https?://\S+', '', body).strip()
                 if len(clean_body) < 12:
                     continue
@@ -100,6 +160,52 @@ class CrowdDivergenceCollector:
                     "publisher": f"StockTwits Crowd (${sym})",
                     "source_type": "CROWD_PULSE",
                     "crowd_sentiment": user_sentiment,
+                    "link": f"https://stocktwits.com/message/{m_id}",
+                    "published": created_str,
+                    "published_at": ts,
+                    "timestamp": ts,
+                    "age_sec": age_sec
+                })
+        except Exception:
+            pass
+        return docs
+
+    def _fetch_stocktwits_trending(self) -> List[Dict[str, Any]]:
+        """Polls real-time market-wide trending stream on StockTwits."""
+        docs = []
+        url = "https://api.stocktwits.com/api/2/streams/trending.json"
+        try:
+            req = urllib.request.Request(url, headers=self.headers)
+            with urllib.request.urlopen(req, timeout=self.request_timeout, context=self.ssl_context) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            msgs = data.get("messages", [])
+            now = time.time()
+            for m in msgs:
+                m_id = m.get("id")
+                body = m.get("body", "").strip()
+                if not body or len(body) < 15:
+                    continue
+
+                created_str = m.get("created_at", "")
+                try:
+                    dt = datetime.strptime(created_str, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+                    ts = dt.timestamp()
+                except Exception:
+                    ts = now
+
+                age_sec = max(0.0, now - ts)
+                if age_sec > 7200.0:
+                    continue
+
+                clean_body = re.sub(r'https?://\S+', '', body).strip()
+                if len(clean_body) < 12:
+                    continue
+
+                docs.append({
+                    "title": clean_body[:280],
+                    "summary": f"StockTwits Trending Pulse: {clean_body}",
+                    "publisher": "StockTwits Global Trending",
+                    "source_type": "CROWD_PULSE",
                     "link": f"https://stocktwits.com/message/{m_id}",
                     "published": created_str,
                     "published_at": ts,
@@ -126,7 +232,6 @@ class CrowdDivergenceCollector:
                 if not title or len(title) < 10:
                     continue
 
-                # Determine accurate publication timestamp
                 ts = None
                 pub_raw = getattr(entry, "published", "") or getattr(entry, "updated", "")
                 if pub_raw:
@@ -166,31 +271,38 @@ class CrowdDivergenceCollector:
 
     def fetch_crowd_divergences(self) -> List[Dict[str, Any]]:
         """
-        Polls live StockTwits crowd discussions, TradingView community theses,
-        high-frequency financial desks, and 1-hour breaking macro Google News feeds concurrently.
-        Returns authentic crowd and breaking documents with sub-minute resolution.
+        Polls live Telegram OSINT wires, StockTwits macro streams & trending firehose,
+        TradingView community theses, micro-breaking financial desks, and 1-hour Google News feeds concurrently.
+        Returns authentic crowd, local OSINT, and breaking documents with sub-minute resolution.
         """
         all_docs = []
         futures = []
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=24) as executor:
-            # 1. Dispatch StockTwits crowd symbols (16 major macro proxies)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=28) as executor:
+            # 1. Dispatch Telegram public OSINT & breaking channels
+            for name, ch in self.TELEGRAM_CHANNELS:
+                futures.append(executor.submit(self._fetch_telegram_channel, name, ch))
+
+            # 2. Dispatch StockTwits crowd symbols (23 macro, currency, credit, and commodity proxies)
             for sym in self.STOCKTWITS_SYMBOLS:
                 futures.append(executor.submit(self._fetch_stocktwits_symbol, sym))
 
-            # 2. Dispatch TradingView community ideas
+            # 3. Dispatch StockTwits Global Trending stream
+            futures.append(executor.submit(self._fetch_stocktwits_trending))
+
+            # 4. Dispatch TradingView community ideas
             for name, url in self.COMMUNITY_THEMES:
                 futures.append(executor.submit(self._fetch_rss_wire, name, url, 2.0, "CROWD_THESIS"))
 
-            # 3. Dispatch Micro-wires
+            # 5. Dispatch Micro-wires
             for name, url in self.MICRO_WIRES:
                 futures.append(executor.submit(self._fetch_rss_wire, name, url, 2.0, "BREAKING_WIRE"))
 
-            # 4. Dispatch Breaking 1h Google News
+            # 6. Dispatch Breaking 1h Google News
             for name, url in self.BREAKING_1H_FEEDS:
                 futures.append(executor.submit(self._fetch_rss_wire, name, url, 1.0, "BREAKING_WIRE"))
 
-            done, _ = concurrent.futures.wait(futures, timeout=self.request_timeout + 1.5)
+            done, _ = concurrent.futures.wait(futures, timeout=self.request_timeout + 1.8)
             for f in done:
                 try:
                     res = f.result()

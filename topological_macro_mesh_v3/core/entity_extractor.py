@@ -65,7 +65,13 @@ class MacroEntityExtractor:
         "trade policy",
         "financial shock",
         "chokepoint",
-        "sanctions"
+        "sanctions",
+        "macro liquidity crisis",
+        "sovereign debt stress",
+        "supply chain disruption",
+        "currency intervention",
+        "safe haven asset",
+        "infrastructure disruption"
     ]
 
     GRAMMAR_STOPWORDS = {
