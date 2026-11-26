@@ -248,10 +248,17 @@
   </aside>
 
   <!-- Bottom Floating HUD & Sovereign Domain Legend -->
-  <footer class="shadcn-card fixed bottom-4 right-4 rounded-lg px-4 py-2 text-xs flex items-center gap-4 z-10 pointer-events-auto border border-zinc-800 shadow-xl bg-zinc-950/90 backdrop-blur-md">
+  <footer class="shadcn-card fixed bottom-4 right-4 rounded-lg px-4 py-2 text-xs flex items-center gap-3.5 z-10 pointer-events-auto border border-zinc-800 shadow-xl bg-zinc-950/90 backdrop-blur-md">
     <div class="flex items-center gap-2">
       <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
       <span class="text-zinc-300 font-mono text-[11px] font-semibold">MACRO MANIFOLD</span>
+    </div>
+    <div class="h-3 w-px bg-zinc-800"></div>
+    <div class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 font-mono text-[9.5px] text-zinc-300">
+      <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+      <span class="text-amber-300 font-bold">RADIAL HORIZON:</span>
+      <span>Center (&lt;30m) &rarr; Orbit (48h)</span>
+      <button onclick="recenterHorizon()" class="ml-1.5 px-1.5 py-0.2 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 text-[9px] font-mono transition" title="Recenter on breaking core horizon">🎯 Center</button>
     </div>
     <div class="h-3 w-px bg-zinc-800"></div>
     <div class="flex items-center gap-3 text-[10px] font-mono text-zinc-400">
@@ -281,11 +288,20 @@
     canvas.width = width;
     canvas.height = height;
 
+    function recenterHorizon() {
+      d3.select(canvas).transition().duration(650).call(
+        zoom.transform,
+        d3.zoomIdentity
+      );
+    }
+
     window.addEventListener('resize', () => {
       width = canvas.width = window.innerWidth;
       height = canvas.height = window.innerHeight;
-      simulation.force('center', d3.forceCenter(width / 2, height / 2));
-      simulation.alpha(0.3).restart();
+      if (simulation.force('radial')) {
+        simulation.force('radial').x(width / 2).y(height / 2);
+      }
+      simulation.alpha(0.2).restart();
     });
 
     // High-Contrast Cyber-Celestial Palette (Matched to Leiden Modularity Galaxies in Reference Screenshot)
@@ -437,24 +453,57 @@
       }
     }
 
-    // Force simulation with galactic separation: wide expansive manifold + inter-cluster lobe repulsion
+    // Temporal Radial Horizon Constants (Core: Breaking <30m -> Outer Orbit: Deep 48h)
+    const HORIZON_MAX_AGE_SEC = 172800; // 48h newsroom horizon
+    const HORIZON_R_MIN = 45;   // Radiant epicenter for breaking wires (<30m)
+    const HORIZON_R_MAX = 740;  // Outer orbit for established background theater (48h)
+
+    const HORIZON_RINGS = [
+      { ageSec: 1800, label: "BREAKING CORE (<30M)", stroke: "rgba(250, 204, 21, 0.24)", textCol: "#fde047" },
+      { ageSec: 7200, label: "INTRADAY CATALYST (<2H)", stroke: "rgba(56, 189, 248, 0.20)", textCol: "#7dd3fc" },
+      { ageSec: 43200, label: "SESSION HORIZON (<12H)", stroke: "rgba(168, 85, 247, 0.15)", textCol: "#c084fc" },
+      { ageSec: 86400, label: "SOVEREIGN BASELINE (24H)", stroke: "rgba(255, 255, 255, 0.08)", textCol: "#94a3b8" },
+      { ageSec: 172800, label: "DEEP MACRO THEATER (48H)", stroke: "rgba(255, 255, 255, 0.05)", textCol: "#64748b" }
+    ];
+
+    // Power-law radial expansion: Circle Area ~ R^2. Exponent 0.52 maps the sub-linear
+    // distribution of incoming wire volume uniformly across circular area to prevent core congestion.
+    function computeTemporalTargetRadius(node) {
+      const age = Math.max(0, (node && node.age_seconds !== undefined) ? node.age_seconds : 7200);
+      const norm = Math.min(1.0, age / HORIZON_MAX_AGE_SEC);
+      return HORIZON_R_MIN + (HORIZON_R_MAX - HORIZON_R_MIN) * Math.pow(norm, 0.52);
+    }
+
+    function computeRadialStrength(node) {
+      const z = (node && node.z_score) || 0;
+      const age = (node && node.age_seconds) || 7200;
+      if (age < 1800 || z >= 3.0) return 0.28; // Tighter gravitational lock for active breaking wires
+      if (age < 7200) return 0.24;             // Firm intraday anchoring
+      return 0.18;                             // Outer orbits allow gentle community clustering
+    }
+
+    // Force simulation with Temporal Radial Horizon + galactic separation
     const simulation = d3.forceSimulation(nodes)
       .force('link', d3.forceLink(links).id(d => d.id)
         .distance(d => {
           const s = (typeof d.source === 'object') ? d.source : nodeMap.get(d.source);
           const t = (typeof d.target === 'object') ? d.target : nodeMap.get(d.target);
           const isSame = s && t && s.cluster !== undefined && s.cluster === t.cluster;
-          return isSame ? (36 + (1 / (d.weight || 0.5)) * 20) : (115 + (1 / (d.weight || 0.5)) * 38);
+          return isSame ? (32 + (1 / (d.weight || 0.5)) * 18) : (95 + (1 / (d.weight || 0.5)) * 32);
         })
         .strength(d => {
           const s = (typeof d.source === 'object') ? d.source : nodeMap.get(d.source);
           const t = (typeof d.target === 'object') ? d.target : nodeMap.get(d.target);
           const isSame = s && t && s.cluster !== undefined && s.cluster === t.cluster;
-          return isSame ? 0.16 : 0.025;
+          return isSame ? 0.14 : 0.02;
         })
       )
-      .force('charge', d3.forceManyBody().strength(d => -60 - (d.r || 3) * 7).distanceMax(650))
-      .force('center', d3.forceCenter(width / 2, height / 2).strength(0.04))
+      .force('charge', d3.forceManyBody().strength(d => -45 - (d.r || 3) * 5).distanceMax(550))
+      .force('radial', d3.forceRadial(
+        d => computeTemporalTargetRadius(d),
+        width / 2,
+        height / 2
+      ).strength(d => computeRadialStrength(d)))
       .force('collision', d3.forceCollide().radius(d => (d.r || 3) + 3.2).iterations(1))
       .alphaDecay(0.022)
       .on('tick', requestTick);
@@ -512,7 +561,37 @@
       ctx.translate(transform.x, transform.y);
       ctx.scale(transform.k, transform.k);
 
-      // 0. Ambient Celestial Nebulas for Macro Theaters (Only Top 6 Primary Communities)
+      // 0. Radial Temporal Horizon Concentric Rings & Radiant Epicenter Core Glow
+      const coreGrad = ctx.createRadialGradient(width / 2, height / 2, 0, width / 2, height / 2, 190);
+      coreGrad.addColorStop(0, 'rgba(250, 204, 21, 0.08)');
+      coreGrad.addColorStop(0.45, 'rgba(56, 189, 248, 0.03)');
+      coreGrad.addColorStop(1, 'transparent');
+      ctx.beginPath();
+      ctx.arc(width / 2, height / 2, 190, 0, Math.PI * 2);
+      ctx.fillStyle = coreGrad;
+      ctx.fill();
+
+      // Render Concentric Dashed Temporal Horizon Rings & Labels
+      ctx.save();
+      ctx.setLineDash([4, 6]);
+      for (const ring of HORIZON_RINGS) {
+        const r = computeTemporalTargetRadius({ age_seconds: ring.ageSec });
+        ctx.beginPath();
+        ctx.arc(width / 2, height / 2, r, 0, Math.PI * 2);
+        ctx.strokeStyle = ring.stroke;
+        ctx.lineWidth = 0.9 / transform.k;
+        ctx.stroke();
+
+        // Delicate cyber-macro horizon label
+        ctx.font = `600 ${Math.max(7.5, 9.5 / transform.k)}px ui-monospace, SFMono-Regular, monospace`;
+        ctx.fillStyle = ring.textCol;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(ring.label, width / 2, (height / 2) - r - (2.5 / transform.k));
+      }
+      ctx.restore();
+
+      // 0.1 Ambient Celestial Nebulas for Macro Theaters (Only Top 6 Primary Communities)
       const clusterNodesMap = new Map();
       for (const node of nodes) {
         const c = node.cluster !== undefined ? node.cluster : 0;
@@ -833,21 +912,25 @@
           `;
         }
         
-        evidenceEl.innerHTML = `
-          <p class="text-white">&bull; Primary Source: <span class="text-cyan-300 font-semibold">${trigSource}</span></p>
-          <p class="text-zinc-300 leading-snug">&bull; Primary Verbatim Headline: <br><span class="text-amber-300 font-mono">"${trigText}"</span></p>
-          <div class="grid grid-cols-2 gap-1.5 pt-1.5 mt-1 border-t border-zinc-800 text-[10px]">
-            <p class="text-zinc-400">&bull; Published: <b class="text-amber-300 font-bold">${node.published_str || node.first_seen_str}</b></p>
-            <p class="text-zinc-400">&bull; Stream Ingest: <b class="text-zinc-300">${node.stream_ingest_str || node.last_seen_str}</b></p>
-          </div>
-          <p class="text-zinc-400">&bull; Freshness Status: <span class="font-mono px-1 py-0.2 rounded bg-zinc-800 text-cyan-300 text-[9px] font-bold">${freshness}</span></p>
-          <p class="text-emerald-400">&bull; Poisson Arrival Velocity: <b>+${zVal}σ</b></p>
-          <p class="text-zinc-400">&bull; Network Connectivity: <b>${node.degree || 1} Connected Links</b></p>
-          <a href="${searchUrl}" target="_blank" class="block w-full py-1.5 px-2 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 text-center font-mono rounded border border-sky-500/40 text-[11px] mt-2 transition">
-            🔍 Verify Lead Wire on Google
-          </a>
-          ${dossierHtml}
-        `;
+          const orbitR = Math.round(computeTemporalTargetRadius(node));
+          evidenceEl.innerHTML = `
+            <p class="text-white">&bull; Primary Source: <span class="text-cyan-300 font-semibold">${trigSource}</span></p>
+            <p class="text-zinc-300 leading-snug">&bull; Primary Verbatim Headline: <br><span class="text-amber-300 font-mono">"${trigText}"</span></p>
+            <div class="grid grid-cols-2 gap-1.5 pt-1.5 mt-1 border-t border-zinc-800 text-[10px]">
+              <p class="text-zinc-400">&bull; Published: <b class="text-amber-300 font-bold">${node.published_str || node.first_seen_str}</b></p>
+              <p class="text-zinc-400">&bull; Stream Ingest: <b class="text-zinc-300">${node.stream_ingest_str || node.last_seen_str}</b></p>
+            </div>
+            <div class="flex items-center justify-between pt-1 text-[10px]">
+              <p class="text-zinc-400">&bull; Freshness Status: <span class="font-mono px-1 py-0.2 rounded bg-zinc-800 text-cyan-300 text-[9px] font-bold">${freshness}</span></p>
+              <p class="text-zinc-400">&bull; Horizon Orbit: <b class="font-mono text-amber-300">${orbitR}px</b></p>
+            </div>
+            <p class="text-emerald-400">&bull; Poisson Arrival Velocity: <b>+${zVal}σ</b></p>
+            <p class="text-zinc-400">&bull; Network Connectivity: <b>${node.degree || 1} Connected Links</b></p>
+            <a href="${searchUrl}" target="_blank" class="block w-full py-1.5 px-2 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 text-center font-mono rounded border border-sky-500/40 text-[11px] mt-2 transition">
+              🔍 Verify Lead Wire on Google
+            </a>
+            ${dossierHtml}
+          `;
       }
 
       const tapeEl = document.getElementById('insp-tape');
@@ -931,8 +1014,9 @@
             existing.freshness_regime = rn.freshness_regime || 'ACTIVE';
             existing.r = rn.r || Math.max(3.0, Math.min(8.5, 2.8 + Math.log1p(rn.degree || 1) * 0.9));
           } else {
+            const targetR = computeTemporalTargetRadius(rn);
             const angle = Math.random() * Math.PI * 2;
-            const dist = 120 + Math.random() * 420;
+            const dist = targetR * (0.85 + Math.random() * 0.3);
             const newNode = {
               id: rn.id,
               label: rn.label,
