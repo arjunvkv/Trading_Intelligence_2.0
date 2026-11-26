@@ -77,11 +77,11 @@
     </div>
     <span id="tt-title" class="font-semibold text-white text-[12px] leading-tight">Node Label</span>
     
-    <!-- Real-time Lead Metrics -->
+    <!-- Real-time Genuine Publication & Quantitative Metrics -->
     <div class="grid grid-cols-3 gap-2 pt-1.5 mt-0.5 border-t border-zinc-800 text-[10px] font-mono text-zinc-400">
       <div>
-        <span class="block text-[9px] text-zinc-500">LEAD TIME</span>
-        <span id="tt-lead" class="text-white font-bold">--</span>
+        <span class="block text-[9px] text-zinc-500">PUBLISHED</span>
+        <span id="tt-lead" class="text-amber-300 font-bold">--</span>
       </div>
       <div>
         <span class="block text-[9px] text-zinc-500">TRANSFER ENTROPY</span>
@@ -198,15 +198,15 @@
         <button onclick="closeInspector()" class="text-zinc-400 hover:text-white text-lg leading-none p-1">&times;</button>
       </div>
 
-      <!-- Execution Lead Card -->
+      <!-- Genuine Publication & Horizon Card -->
       <div class="bg-zinc-900/90 p-3 rounded-lg border border-zinc-800 space-y-2">
         <div class="flex justify-between items-center text-xs">
-          <span class="text-zinc-400 font-mono text-[10px] uppercase font-bold">Estimated Lead-Time</span>
-          <span id="insp-lead-clock" class="font-mono text-emerald-400 font-bold text-sm">--</span>
+          <span class="text-zinc-400 font-mono text-[10px] uppercase font-bold">Newsroom Published</span>
+          <span id="insp-lead-clock" class="font-mono text-amber-300 font-bold text-sm">--</span>
         </div>
         <div class="flex justify-between items-center text-xs pt-1 border-t border-zinc-800">
-          <span class="text-zinc-400 font-mono text-[10px] uppercase font-bold">Market Phase</span>
-          <span id="insp-phase" class="font-mono text-amber-300 text-xs">Awaiting Selection</span>
+          <span class="text-zinc-400 font-mono text-[10px] uppercase font-bold">Temporal Horizon</span>
+          <span id="insp-phase" class="font-mono text-cyan-300 text-xs">Awaiting Selection</span>
         </div>
       </div>
 
@@ -298,9 +298,6 @@
     window.addEventListener('resize', () => {
       width = canvas.width = window.innerWidth;
       height = canvas.height = window.innerHeight;
-      if (simulation.force('radial')) {
-        simulation.force('radial').x(width / 2).y(height / 2);
-      }
       simulation.alpha(0.2).restart();
     });
 
@@ -474,12 +471,40 @@
       return HORIZON_R_MIN + (HORIZON_R_MAX - HORIZON_R_MIN) * Math.pow(norm, 0.52);
     }
 
-    function computeRadialStrength(node) {
-      const z = (node && node.z_score) || 0;
-      const age = (node && node.age_seconds) || 7200;
-      if (age < 1800 || z >= 3.0) return 0.28; // Tighter gravitational lock for active breaking wires
-      if (age < 7200) return 0.24;             // Firm intraday anchoring
-      return 0.18;                             // Outer orbits allow gentle community clustering
+    // Custom degree-aware Temporal Radial Force with strict Breaking Core Sanctuary Guard
+    function forceRadialTemporal(alpha) {
+      const cx = width / 2;
+      const cy = height / 2;
+      for (let i = 0; i < nodes.length; ++i) {
+        const node = nodes[i];
+        const targetR = computeTemporalTargetRadius(node);
+        let dx = node.x - cx;
+        let dy = node.y - cy;
+        let r = Math.hypot(dx, dy);
+        if (r < 1e-3) {
+          const angle = ((node.cluster || 0) * 1.618 + (i % 19) * 0.33);
+          dx = Math.cos(angle) * 1e-2;
+          dy = Math.sin(angle) * 1e-2;
+          r = 1e-2;
+        }
+
+        // Degree-boosted restoring force: Prevents 80+ link hubs (e.g. India, US, China)
+        // from being sucked inward into the core by dozens of connecting links!
+        const deg = node.degree || 1;
+        const degWeight = Math.min(8.0, 1.0 + Math.sqrt(deg) * 0.6);
+        const k = Math.min(0.85, 0.35 * degWeight) * alpha;
+        const diff = (targetR - r);
+
+        node.vx += (dx / r) * diff * k;
+        node.vy += (dy / r) * diff * k;
+
+        // Strict Sanctuary Guard: No node older than 30m is EVER permitted inside the Breaking Core (<30m)
+        if (node.age_seconds >= 1800 && r < 108) {
+          const escape = (112 - r);
+          node.vx += (dx / r) * escape * 0.85 * alpha;
+          node.vy += (dy / r) * escape * 0.85 * alpha;
+        }
+      }
     }
 
     // Force simulation with Temporal Radial Horizon + galactic separation
@@ -495,15 +520,12 @@
           const s = (typeof d.source === 'object') ? d.source : nodeMap.get(d.source);
           const t = (typeof d.target === 'object') ? d.target : nodeMap.get(d.target);
           const isSame = s && t && s.cluster !== undefined && s.cluster === t.cluster;
-          return isSame ? 0.14 : 0.02;
+          const maxDeg = Math.max(1, (s ? s.degree || 1 : 1), (t ? t.degree || 1 : 1));
+          return (isSame ? 0.12 : 0.02) / Math.sqrt(maxDeg);
         })
       )
       .force('charge', d3.forceManyBody().strength(d => -45 - (d.r || 3) * 5).distanceMax(550))
-      .force('radial', d3.forceRadial(
-        d => computeTemporalTargetRadius(d),
-        width / 2,
-        height / 2
-      ).strength(d => computeRadialStrength(d)))
+      .force('radial', forceRadialTemporal)
       .force('collision', d3.forceCollide().radius(d => (d.r || 3) + 3.2).iterations(1))
       .alphaDecay(0.022)
       .on('tick', requestTick);
@@ -802,11 +824,9 @@
         document.getElementById('tt-dot').style.background = c.color;
         
         const shortest = findShortestPathToHub(found);
-        const hops = shortest.length || 1;
-        const leadMin = (c.avgLeadMin * (0.8 + (hops * 0.2))).toFixed(1);
         const vState = getNodeVisualState(found);
         
-        document.getElementById('tt-lead').innerText = `+${leadMin} min`;
+        document.getElementById('tt-lead').innerText = found.published_str || found.first_seen_str || 'Recently';
         document.getElementById('tt-te').innerText = (0.65 + (found.r / 8) * 0.3).toFixed(2) + ' bit';
         document.getElementById('tt-accel').innerText = '+' + (found.z_score || 0.0).toFixed(1) + 'σ';
         document.getElementById('tt-hops').innerText = `${found.degree || 1} Connected Links`;
@@ -849,9 +869,9 @@
       badge.style.color = cluster.color;
       badge.style.borderColor = cluster.color + '66';
 
-      const hops = activePathEdges.length || 1;
-      const dynamicLag = Math.round(hops * 7.5);
-      document.getElementById('insp-lead-clock').innerText = `+${dynamicLag} min Geodesic Window`;
+      const orbitR = Math.round(computeTemporalTargetRadius(node));
+      document.getElementById('insp-lead-clock').innerText = node.published_str || node.first_seen_str || 'Recently';
+      document.getElementById('insp-phase').innerText = `${node.freshness_regime || 'ACTIVE'} (${orbitR}px Orbit)`;
 
       const te = (node.te || 0.45).toFixed(2);
       document.getElementById('insp-te').innerText = `${te} bit`;
