@@ -736,6 +736,29 @@
         ctx.fill(p);
       }
 
+      // 2.3 Draw Clue Beacon Auras (Living Core Velocity Spikes, Narrative Clashes, Corroborations)
+      const beaconPulse = 1.0 + 0.24 * Math.sin(animTime * 10);
+      ctx.save();
+      for (const node of nodes) {
+        if (!node.clue_flags || node.clue_flags.length === 0) continue;
+        const flags = node.clue_flags;
+        const bRadius = (node.r + 2.4) * beaconPulse;
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, bRadius, 0, Math.PI * 2);
+        if (flags.includes('VELOCITY_SPIKE')) {
+          ctx.strokeStyle = 'rgba(250, 204, 21, 0.85)'; // Radiant Gold Beacon
+          ctx.lineWidth = 1.6 / transform.k;
+        } else if (flags.includes('NARRATIVE_CLASH')) {
+          ctx.strokeStyle = 'rgba(244, 63, 94, 0.85)'; // Neon Rose/Red Clash Beacon
+          ctx.lineWidth = 1.6 / transform.k;
+        } else {
+          ctx.strokeStyle = 'rgba(16, 185, 129, 0.75)'; // Emerald Corroborated Shield
+          ctx.lineWidth = 1.2 / transform.k;
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+
       // Draw ONLY the actively hovered or selected node on top with radiant aura
       if (activeNodeObj) {
         const { node, isSelected } = activeNodeObj;
@@ -819,7 +842,13 @@
           requestTick();
         }
         const c = getClusterMeta(found.cluster);
-        document.getElementById('tt-title').innerText = found.label;
+        let clueTag = '';
+        if (found.clue_flags && found.clue_flags.length > 0) {
+          if (found.clue_flags.includes('VELOCITY_SPIKE')) clueTag = ' <span class="text-amber-400 font-bold text-[10px]">⚡ SPIKE</span>';
+          else if (found.clue_flags.includes('NARRATIVE_CLASH')) clueTag = ' <span class="text-rose-400 font-bold text-[10px]">⚔ CLASH</span>';
+          else if (found.clue_flags.includes('CORROBORATED')) clueTag = ' <span class="text-emerald-400 font-bold text-[10px]">🛡 CORROB</span>';
+        }
+        document.getElementById('tt-title').innerHTML = found.label + clueTag;
         document.getElementById('tt-cluster').innerText = c.name.toUpperCase();
         document.getElementById('tt-dot').style.background = c.color;
         
@@ -905,6 +934,57 @@
         const lastSeenText = node.last_seen_str || 'Just now';
         const freshness = node.freshness_regime || 'ACTIVE';
 
+        // Clue Badges
+        let clueBadgesHtml = '';
+        if (node.clue_flags && node.clue_flags.length > 0) {
+          clueBadgesHtml = `
+            <div class="mb-2 p-1.5 rounded bg-zinc-900/90 border border-amber-500/30 flex flex-wrap gap-1">
+              ${node.clue_flags.map(f => {
+                if (f === 'VELOCITY_SPIKE') return `<span class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono text-[9px] font-bold border border-amber-500/40">⚡ VELOCITY SPIKE</span>`;
+                if (f === 'NARRATIVE_CLASH') return `<span class="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-mono text-[9px] font-bold border border-rose-500/40">⚔ NARRATIVE CLASH</span>`;
+                return `<span class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-[9px] font-bold border border-emerald-500/40">🛡 CORROBORATED</span>`;
+              }).join('')}
+            </div>
+          `;
+        }
+
+        // Source Category Breakdown
+        let sourceBreakdownHtml = '';
+        if (node.source_breakdown) {
+          const sb = node.source_breakdown;
+          sourceBreakdownHtml = `
+            <div class="flex items-center gap-1.5 text-[9px] font-mono text-zinc-400 py-1 border-t border-zinc-800">
+              <span>Sovereign: <b class="text-white">${sb.sovereign || 0}</b></span>
+              <span>Geopo: <b class="text-white">${sb.geopo || 0}</b></span>
+              <span>Crowd: <b class="text-cyan-300">${sb.crowd || 0}</b></span>
+              <span>Breaking: <b class="text-amber-300">${sb.breaking || 0}</b></span>
+            </div>
+          `;
+        }
+
+        // Live Crowd Discussion Telemetry
+        let crowdSnippetHtml = '';
+        if (node.crowd_snippets && node.crowd_snippets.length > 0) {
+          crowdSnippetHtml = `
+            <div class="mt-2.5 pt-2 border-t border-zinc-800">
+              <span class="text-[9.5px] font-semibold text-cyan-400 uppercase tracking-wider block mb-1.5 flex items-center gap-1">
+                <span>💬</span> Live Crowd & Trader Pulses (${node.crowd_snippets.length})
+              </span>
+              <div class="space-y-1.5 max-h-40 overflow-y-auto custom-scroll pr-1">
+                ${node.crowd_snippets.map(cs => `
+                  <div class="bg-zinc-950/90 p-1.5 rounded border border-zinc-800/80 text-[10px] space-y-0.5">
+                    <div class="flex justify-between items-center text-zinc-500 font-mono text-[8.5px]">
+                      <span class="text-cyan-400 font-semibold truncate max-w-[150px]">${cs.publisher}</span>
+                      ${cs.sentiment ? `<span class="font-bold ${cs.sentiment === 'Bullish' ? 'text-emerald-400' : 'text-rose-400'}">${cs.sentiment}</span>` : ''}
+                    </div>
+                    <p class="text-zinc-200 font-mono text-[9px] leading-snug">"${cs.text}"</p>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          `;
+        }
+
         // Additional distinct genuine wires for this entity
         let dossierHtml = '';
         const otherWires = (node.wire_history || []).filter(w => w.title && w.title.trim().toLowerCase() !== trigText.trim().toLowerCase());
@@ -934,6 +1014,7 @@
         
           const orbitR = Math.round(computeTemporalTargetRadius(node));
           evidenceEl.innerHTML = `
+            ${clueBadgesHtml}
             <p class="text-white">&bull; Primary Source: <span class="text-cyan-300 font-semibold">${trigSource}</span></p>
             <p class="text-zinc-300 leading-snug">&bull; Primary Verbatim Headline: <br><span class="text-amber-300 font-mono">"${trigText}"</span></p>
             <div class="grid grid-cols-2 gap-1.5 pt-1.5 mt-1 border-t border-zinc-800 text-[10px]">
@@ -946,9 +1027,11 @@
             </div>
             <p class="text-emerald-400">&bull; Poisson Arrival Velocity: <b>+${zVal}σ</b></p>
             <p class="text-zinc-400">&bull; Network Connectivity: <b>${node.degree || 1} Connected Links</b></p>
+            ${sourceBreakdownHtml}
             <a href="${searchUrl}" target="_blank" class="block w-full py-1.5 px-2 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 text-center font-mono rounded border border-sky-500/40 text-[11px] mt-2 transition">
               🔍 Verify Lead Wire on Google
             </a>
+            ${crowdSnippetHtml}
             ${dossierHtml}
           `;
       }
@@ -1032,6 +1115,10 @@
             existing.stream_ingest_str = rn.stream_ingest_str || 'Recently';
             existing.last_seen_str = rn.last_seen_str || 'Just now';
             existing.freshness_regime = rn.freshness_regime || 'ACTIVE';
+            existing.clue_flags = rn.clue_flags || [];
+            existing.corroboration_score = rn.corroboration_score || 0;
+            existing.source_breakdown = rn.source_breakdown || {};
+            existing.crowd_snippets = rn.crowd_snippets || [];
             existing.r = rn.r || Math.max(3.0, Math.min(8.5, 2.8 + Math.log1p(rn.degree || 1) * 0.9));
           } else {
             const targetR = computeTemporalTargetRadius(rn);
@@ -1046,6 +1133,10 @@
               r: rn.r || Math.max(3.0, Math.min(8.5, 2.8 + Math.log1p(rn.degree || 1) * 0.9)),
               z_score: rn.z_score || 0.0,
               isSurging: rn.is_surging || (rn.z_score >= 10.0),
+              clue_flags: rn.clue_flags || [],
+              corroboration_score: rn.corroboration_score || 0,
+              source_breakdown: rn.source_breakdown || {},
+              crowd_snippets: rn.crowd_snippets || [],
               trigger_text: rn.trigger_text || '',
               trigger_source: rn.trigger_source || '',
               wire_history: rn.wire_history || [],

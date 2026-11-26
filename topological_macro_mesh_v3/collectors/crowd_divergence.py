@@ -2,11 +2,12 @@
 CROWD DIVERGENCE & REAL-TIME CROWD PULSE COLLECTOR (ZERO HARDCODES)
 Gathers authentic minute-by-minute crowd discussions, retail sentiment pulses,
 and high-frequency micro-breaking wires from live financial streams:
-1. StockTwits Live Retail Crowd Firehose ($GLD, $SLV, $USO, $DXY, $TLT, $TNX, $SPY, $QQQ, etc.)
-2. Rapid Micro-Breaking Financial Desks (Investing.com, ForexLive, FXStreet, ZeroHedge, MarketWatch)
-3. High-Velocity 1-Hour Breaking Macro Wires (when:1h Gold, Yields, Sanctions, Energy)
+1. StockTwits Live Retail Crowd Streams ($GLD, $SLV, $USO, $DXY, $TLT, $TNX, $SPY, $QQQ, $VIX, $UUP, $CPER, $UNG, $XLE, $XLF, $DBA, $GDX)
+2. TradingView Real-Time Community Theses & Ideas
+3. Rapid Micro-Breaking Financial Desks (Dow Jones, WSJ Markets, CNBC, Investing.com, FXStreet, ZeroHedge, MarketWatch)
+4. High-Velocity 1-Hour Breaking Macro Wires (when:1h Gold, Yields, Sanctions, Energy)
 
-Every post contains its true, authentic epoch timestamp and raw human telemetry.
+Every post contains its true, authentic epoch timestamp, publisher attribution, and raw narrative telemetry.
 """
 
 import time
@@ -14,6 +15,7 @@ import json
 import urllib.request
 import urllib.parse
 import email.utils
+import calendar
 import concurrent.futures
 import ssl
 import re
@@ -23,14 +25,21 @@ import feedparser
 
 class CrowdDivergenceCollector:
     STOCKTWITS_SYMBOLS = [
-        "GLD", "SLV", "USO", "DXY", "TLT", "TNX", "SPY", "QQQ"
+        "GLD", "SLV", "USO", "DXY", "TLT", "TNX", "SPY", "QQQ",
+        "VIX", "UUP", "CPER", "UNG", "XLE", "XLF", "DBA", "GDX"
+    ]
+
+    COMMUNITY_THEMES = [
+        ("TradingView Macro Ideas", "https://www.tradingview.com/feed/")
     ]
 
     MICRO_WIRES = [
+        ("Dow Jones Realtime", "https://feeds.content.dowjones.io/public/rss/mw_realtimeheadlines"),
+        ("WSJ Markets", "https://feeds.a.dj.com/rss/RSSMarketsMain.xml"),
+        ("CNBC Central Banks & Economy", "https://www.cnbc.com/id/10000664/device/rss/rss.html"),
         ("Investing.com Flash", "https://www.investing.com/rss/news_25.rss"),
-        ("ForexLive Breaking", "https://www.forexlive.com/feed/news"),
         ("FXStreet Fast Wire", "https://www.fxstreet.com/rss/news"),
-        ("ZeroHedge Headlines", "http://feeds.feedburner.com/zerohedge/feed"),
+        ("ZeroHedge Macro", "http://feeds.feedburner.com/zerohedge/feed"),
         ("MarketWatch Bulletins", "https://feeds.content.dowjones.io/public/rss/mw_bulletins")
     ]
 
@@ -82,11 +91,15 @@ class CrowdDivergenceCollector:
                 if len(clean_body) < 12:
                     continue
 
+                sentiment_obj = m.get("entities", {}).get("sentiment")
+                user_sentiment = sentiment_obj.get("basic") if isinstance(sentiment_obj, dict) else None
+
                 docs.append({
                     "title": clean_body[:280],
                     "summary": f"StockTwits Crowd Pulse (${sym}): {clean_body}",
                     "publisher": f"StockTwits Crowd (${sym})",
                     "source_type": "CROWD_PULSE",
+                    "crowd_sentiment": user_sentiment,
                     "link": f"https://stocktwits.com/message/{m_id}",
                     "published": created_str,
                     "published_at": ts,
@@ -97,7 +110,7 @@ class CrowdDivergenceCollector:
             pass
         return docs
 
-    def _fetch_rss_wire(self, name: str, url: str, max_age_hours: float = 2.0) -> List[Dict[str, Any]]:
+    def _fetch_rss_wire(self, name: str, url: str, max_age_hours: float = 2.0, source_type: str = "BREAKING_WIRE") -> List[Dict[str, Any]]:
         docs = []
         now = time.time()
         max_age_sec = max_age_hours * 3600.0
@@ -124,7 +137,6 @@ class CrowdDivergenceCollector:
                         pass
 
                 if not ts and hasattr(entry, "published_parsed") and entry.published_parsed:
-                    import calendar
                     try:
                         ts = calendar.timegm(entry.published_parsed)
                     except Exception:
@@ -139,9 +151,9 @@ class CrowdDivergenceCollector:
 
                 docs.append({
                     "title": title,
-                    "summary": summary[:400],
+                    "summary": summary[:400] if summary else title,
                     "publisher": name,
-                    "source_type": "BREAKING_WIRE",
+                    "source_type": source_type,
                     "link": link,
                     "published": pub_raw,
                     "published_at": ts,
@@ -154,25 +166,29 @@ class CrowdDivergenceCollector:
 
     def fetch_crowd_divergences(self) -> List[Dict[str, Any]]:
         """
-        Polls live StockTwits crowd discussions, high-frequency financial desks,
-        and 1-hour breaking macro Google News feeds concurrently.
+        Polls live StockTwits crowd discussions, TradingView community theses,
+        high-frequency financial desks, and 1-hour breaking macro Google News feeds concurrently.
         Returns authentic crowd and breaking documents with sub-minute resolution.
         """
         all_docs = []
         futures = []
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=14) as executor:
-            # 1. Dispatch StockTwits crowd symbols
+        with concurrent.futures.ThreadPoolExecutor(max_workers=24) as executor:
+            # 1. Dispatch StockTwits crowd symbols (16 major macro proxies)
             for sym in self.STOCKTWITS_SYMBOLS:
                 futures.append(executor.submit(self._fetch_stocktwits_symbol, sym))
 
-            # 2. Dispatch Micro-wires
-            for name, url in self.MICRO_WIRES:
-                futures.append(executor.submit(self._fetch_rss_wire, name, url, 2.0))
+            # 2. Dispatch TradingView community ideas
+            for name, url in self.COMMUNITY_THEMES:
+                futures.append(executor.submit(self._fetch_rss_wire, name, url, 2.0, "CROWD_THESIS"))
 
-            # 3. Dispatch Breaking 1h Google News
+            # 3. Dispatch Micro-wires
+            for name, url in self.MICRO_WIRES:
+                futures.append(executor.submit(self._fetch_rss_wire, name, url, 2.0, "BREAKING_WIRE"))
+
+            # 4. Dispatch Breaking 1h Google News
             for name, url in self.BREAKING_1H_FEEDS:
-                futures.append(executor.submit(self._fetch_rss_wire, name, url, 1.0))
+                futures.append(executor.submit(self._fetch_rss_wire, name, url, 1.0, "BREAKING_WIRE"))
 
             done, _ = concurrent.futures.wait(futures, timeout=self.request_timeout + 1.5)
             for f in done:
