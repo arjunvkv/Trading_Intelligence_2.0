@@ -957,6 +957,7 @@
               <span>Sovereign: <b class="text-white">${sb.sovereign || 0}</b></span>
               <span>Geopo: <b class="text-white">${sb.geopo || 0}</b></span>
               <span>Telegram: <b class="text-sky-400 font-bold">${sb.telegram || 0}</b></span>
+              <span>Mastodon: <b class="text-purple-400 font-bold">${sb.mastodon || 0}</b></span>
               <span>Crowd: <b class="text-cyan-300">${sb.crowd || 0}</b></span>
               <span>Breaking: <b class="text-amber-300">${sb.breaking || 0}</b></span>
             </div>
@@ -969,7 +970,7 @@
           crowdSnippetHtml = `
             <div class="mt-2.5 pt-2 border-t border-zinc-800">
               <span class="text-[9.5px] font-semibold text-cyan-400 uppercase tracking-wider block mb-1.5 flex items-center gap-1">
-                <span>💬</span> Live Crowd & Telegram OSINT Pulses (${node.crowd_snippets.length})
+                <span>💬</span> Live OSINT, Telegram & Fediverse Pulses (${node.crowd_snippets.length})
               </span>
               <div class="space-y-1.5 max-h-40 overflow-y-auto custom-scroll pr-1">
                 ${node.crowd_snippets.map(cs => `

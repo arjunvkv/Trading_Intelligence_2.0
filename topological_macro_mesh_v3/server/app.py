@@ -10,7 +10,7 @@ from fastapi import FastAPI, Response
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-def create_app(manifold, radar, intermarket_collector, health_provider: Optional[Callable[[], Dict[str, Any]]] = None) -> FastAPI:
+def create_app(manifold, radar, intermarket_collector, health_provider: Optional[Callable[[], Dict[str, Any]]] = None, graph_provider: Optional[Callable[[], Dict[str, Any]]] = None) -> FastAPI:
     app = FastAPI(title="Sovereign Macro Topological Mesh V3", version="3.0.0")
 
     app.add_middleware(
@@ -47,13 +47,18 @@ def create_app(manifold, radar, intermarket_collector, health_provider: Optional
 
     @app.get("/api/graph")
     def get_graph():
+        if graph_provider:
+            return graph_provider()
         health = health_provider() if health_provider else None
         return manifold.get_graph_export(radar=radar, collector_health=health)
 
     @app.get("/api/nodes")
     def get_nodes():
-        health = health_provider() if health_provider else None
-        data = manifold.get_graph_export(radar=radar, collector_health=health)
+        if graph_provider:
+            data = graph_provider()
+        else:
+            health = health_provider() if health_provider else None
+            data = manifold.get_graph_export(radar=radar, collector_health=health)
         nodes = data.get("nodes", [])
         sorted_nodes = sorted(nodes, key=lambda n: (n.get("centrality", 0.0), n.get("hawkes_lambda", 0.0)), reverse=True)
         return {

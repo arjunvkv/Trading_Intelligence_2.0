@@ -349,9 +349,11 @@ class TopologicalManifold:
 
                     self.surprisal.register_entity(name)
 
-                # Track source category breakdown & crowd/telegram snippets
+                # Track source category breakdown & crowd/telegram/mastodon snippets
                 if "TELEGRAM" in str(source_type):
                     st_cat = "telegram"
+                elif "MASTODON" in str(source_type):
+                    st_cat = "mastodon"
                 elif "CROWD" in str(source_type):
                     st_cat = "crowd"
                 elif "BREAKING" in str(source_type):
@@ -362,10 +364,10 @@ class TopologicalManifold:
                     st_cat = "sovereign"
 
                 if name not in self.entity_source_types:
-                    self.entity_source_types[name] = {"sovereign": 0, "geopo": 0, "crowd": 0, "breaking": 0, "telegram": 0}
+                    self.entity_source_types[name] = {"sovereign": 0, "geopo": 0, "crowd": 0, "breaking": 0, "telegram": 0, "mastodon": 0}
                 self.entity_source_types[name][st_cat] = self.entity_source_types[name].get(st_cat, 0) + 1
 
-                if "CROWD" in str(source_type) or "TELEGRAM" in str(source_type):
+                if "CROWD" in str(source_type) or "TELEGRAM" in str(source_type) or "MASTODON" in str(source_type):
                     if name not in self.entity_crowd_snippets:
                         self.entity_crowd_snippets[name] = []
                     if len(self.entity_crowd_snippets[name]) < 6:
@@ -727,8 +729,10 @@ class TopologicalManifold:
             distinct_sources = sum(1 for v in st_counts.values() if v > 0)
 
             # Topological Coherence Gate (Suppresses isolated 1-post retail noise)
-            is_single_crowd = (node.get("observation_count", 1) <= 1 and st_counts.get("crowd", 0) > 0 and st_counts.get("sovereign", 0) == 0 and st_counts.get("geopo", 0) == 0 and st_counts.get("breaking", 0) == 0 and st_counts.get("telegram", 0) == 0)
-            if is_single_crowd and deg == 0:
+            has_crowd_pulse = (st_counts.get("crowd", 0) > 0 or st_counts.get("telegram", 0) > 0 or st_counts.get("mastodon", 0) > 0)
+            has_official_pulse = (st_counts.get("sovereign", 0) > 0 or st_counts.get("geopo", 0) > 0 or st_counts.get("breaking", 0) > 0)
+            is_isolated_single_crowd = (node.get("observation_count", 1) <= 1 and has_crowd_pulse and not has_official_pulse and deg == 0)
+            if is_isolated_single_crowd:
                 continue  # Quarantined: isolated uncorroborated single mention with 0 graph edges
 
             clue_flags = []
@@ -736,7 +740,7 @@ class TopologicalManifold:
                 clue_flags.append("VELOCITY_SPIKE")
             if distinct_sources >= 2:
                 clue_flags.append("CORROBORATED")
-            if (st_counts.get("crowd", 0) > 0 or st_counts.get("telegram", 0) > 0) and (st_counts.get("sovereign", 0) > 0 or st_counts.get("geopo", 0) > 0 or st_counts.get("breaking", 0) > 0):
+            if has_crowd_pulse and has_official_pulse:
                 clue_flags.append("NARRATIVE_CLASH")
 
             export_nodes.append({
