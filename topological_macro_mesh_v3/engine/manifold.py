@@ -69,9 +69,9 @@ class TopologicalManifold:
         now = time.time()
         pub_ts = doc.get("published_at", now)
 
-        # Strict Publication Age Filter (Drop any document older than 48 hours)
+        # Strict Publication Age Filter (Drop any document older than 24 hours)
         doc_age = doc.get("age_sec")
-        if doc_age is not None and doc_age > 48.0 * 3600.0:
+        if doc_age is not None and doc_age > 24.0 * 3600.0:
             return []
 
         # Extract genuine macro entities (with sub-token suppression)
@@ -223,7 +223,7 @@ class TopologicalManifold:
 
         for d in docs:
             doc_age = d.get("age_sec")
-            if doc_age is not None and doc_age > 48.0 * 3600.0:
+            if doc_age is not None and doc_age > 24.0 * 3600.0:
                 continue
             title = d.get("title", "").strip()
             summary = d.get("summary", "").strip()
@@ -402,8 +402,10 @@ class TopologicalManifold:
             decay_factor = math.exp(- (math.log(2) * age) / hl)
             node["effective_weight"] = node["observation_count"] * decay_factor
 
-            # Culling threshold: 24h of inactivity or dead weight
-            if age > 86400.0 or (age > hl * 3 and node["observation_count"] < 2):
+            # Strict 24h Eviction Horizon: Nodes older than 24h evaporate from active mesh
+            pub_ts = node.get("trigger_pub_ts") or node.get("created_at", now)
+            pub_age = now - pub_ts
+            if pub_age > 86400.0 or age > 43200.0 or (age > hl * 3 and node["observation_count"] < 2):
                 dead_nodes.append(name)
 
         for name in dead_nodes:
@@ -608,18 +610,21 @@ class TopologicalManifold:
             else:
                 pub_str = f"{round(pub_age_sec / 86400.0, 1)}d ago"
 
-            # True real-world freshness regime based on actual news publication age
-            if pub_age_sec < 1800:
-                regime = "BREAKING WIRE (<30m)"
+            # True real-world freshness regime based on 24h living supernova scale
+            if pub_age_sec < 900:
+                regime = "LIVING CORE (<15m)"
                 age_dist["under_5m"] += 1
-            elif pub_age_sec < 7200:
-                regime = "INTRADAY CATALYST (<2h)"
+            elif pub_age_sec < 3600:
+                regime = "INTRADAY PULSE (<1h)"
                 age_dist["5m_to_15m"] += 1
-            elif pub_age_sec < 86400:
-                regime = f"ACTIVE HORIZON ({pub_str})"
+            elif pub_age_sec < 14400:
+                regime = f"SESSION TRANSMISSION ({pub_str})"
                 age_dist["15m_to_60m"] += 1
+            elif pub_age_sec < 86400:
+                regime = f"ACTIVE BASELINE ({pub_str})"
+                age_dist["over_60m"] += 1
             else:
-                regime = f"ESTABLISHED THEATER ({pub_str})"
+                regime = f"EVENT HORIZON DECAY ({pub_str})"
                 age_dist["over_60m"] += 1
 
             centrality = node.get("centrality", 0.0)

@@ -36,14 +36,14 @@ class SovereignRadar:
                     "id": cid,
                     "title": title,
                     "stage": "WHISPER",
-                    "origin_source": "CROWD_DIVERGENCE",
+                    "origin_source": div.get("source_type", "CROWD_PULSE"),
                     "surprisal": 3.5,
                     "branching_ratio": 0.3,
                     "first_seen": now,
                     "last_active": now,
                     "description": div.get("summary", ""),
                     "participating_nodes": [title],
-                    "publishers": ["Crowd Attention Telemetry"]
+                    "publishers": [div.get("publisher", "Live Crowd Telemetry")]
                 }
             else:
                 self.active_clues[cid]["last_active"] = now

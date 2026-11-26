@@ -257,7 +257,7 @@
     <div class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 font-mono text-[9.5px] text-zinc-300">
       <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
       <span class="text-amber-300 font-bold">RADIAL HORIZON:</span>
-      <span>Center (&lt;30m) &rarr; Orbit (48h)</span>
+      <span>Living Core (&lt;15m) &rarr; Orbit (24h)</span>
       <button onclick="recenterHorizon()" class="ml-1.5 px-1.5 py-0.2 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 text-[9px] font-mono transition" title="Recenter on breaking core horizon">🎯 Center</button>
     </div>
     <div class="h-3 w-px bg-zinc-800"></div>
@@ -450,17 +450,17 @@
       }
     }
 
-    // Temporal Radial Horizon Constants (Core: Breaking <30m -> Outer Orbit: Deep 48h)
-    const HORIZON_MAX_AGE_SEC = 172800; // 48h newsroom horizon
-    const HORIZON_R_MIN = 45;   // Radiant epicenter for breaking wires (<30m)
-    const HORIZON_R_MAX = 740;  // Outer orbit for established background theater (48h)
+    // Temporal Radial Horizon Constants (Living Core: <15m -> Outer Orbit: 24h Decay)
+    const HORIZON_MAX_AGE_SEC = 86400; // 24h strict rolling horizon
+    const HORIZON_R_MIN = 45;   // Radiant epicenter for live breaking crowd & wires (<15m)
+    const HORIZON_R_MAX = 740;  // Outer orbit for 24h decay horizon
 
     const HORIZON_RINGS = [
-      { ageSec: 1800, label: "BREAKING CORE (<30M)", stroke: "rgba(250, 204, 21, 0.24)", textCol: "#fde047" },
-      { ageSec: 7200, label: "INTRADAY CATALYST (<2H)", stroke: "rgba(56, 189, 248, 0.20)", textCol: "#7dd3fc" },
-      { ageSec: 43200, label: "SESSION HORIZON (<12H)", stroke: "rgba(168, 85, 247, 0.15)", textCol: "#c084fc" },
-      { ageSec: 86400, label: "SOVEREIGN BASELINE (24H)", stroke: "rgba(255, 255, 255, 0.08)", textCol: "#94a3b8" },
-      { ageSec: 172800, label: "DEEP MACRO THEATER (48H)", stroke: "rgba(255, 255, 255, 0.05)", textCol: "#64748b" }
+      { ageSec: 900, label: "LIVING CORE (<15M)", stroke: "rgba(250, 204, 21, 0.32)", textCol: "#fde047" },
+      { ageSec: 3600, label: "INTRADAY PULSE (<1H)", stroke: "rgba(56, 189, 248, 0.22)", textCol: "#7dd3fc" },
+      { ageSec: 14400, label: "SESSION TRANSMISSION (<4H)", stroke: "rgba(168, 85, 247, 0.16)", textCol: "#c084fc" },
+      { ageSec: 43200, label: "ACTIVE BASELINE (<12H)", stroke: "rgba(255, 255, 255, 0.08)", textCol: "#94a3b8" },
+      { ageSec: 86400, label: "EVENT HORIZON (24H DECAY)", stroke: "rgba(255, 255, 255, 0.05)", textCol: "#64748b" }
     ];
 
     // Power-law radial expansion: Circle Area ~ R^2. Exponent 0.52 maps the sub-linear
@@ -498,8 +498,8 @@
         node.vx += (dx / r) * diff * k;
         node.vy += (dy / r) * diff * k;
 
-        // Strict Sanctuary Guard: No node older than 30m is EVER permitted inside the Breaking Core (<30m)
-        if (node.age_seconds >= 1800 && r < 108) {
+        // Strict Sanctuary Guard: No node older than 15m is EVER permitted inside the Living Core (<15m)
+        if (node.age_seconds >= 900 && r < 108) {
           const escape = (112 - r);
           node.vx += (dx / r) * escape * 0.85 * alpha;
           node.vy += (dy / r) * escape * 0.85 * alpha;
